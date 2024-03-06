@@ -4,33 +4,13 @@
 * Data
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import ssl
-  from sklearn.datasets import fetch_openml
-  import jax.numpy as jnp
-  ssl._create_default_https_context = ssl._create_unverified_context
+  import mnist
 
-  def normalize_to_zero_to_one(x):
-    return (x - x.min())/(x.max() - x.min())
-
-  def normalize_to_neg_one_to_one(x):
-    return normalize_to_zero_to_one(x) * 2 - 1
-
-  def unnormalize_image(xs):
-    assert len(xs.shape) == 4
-    ys = []
-    for x in xs:
-      ys.append(normalize_to_zero_to_one(x) * 255) # pixel values to range from 0 to 255
-    return ys
-
-  images, labels = fetch_openml('mnist_784', version=1, return_X_y=True, parser='auto')
-  images = images.to_numpy()
-  images = images.reshape(images.shape[0], 28, 28, 1) # (n, 28, 28, 1)
-  normalized_images = jnp.array(normalize_to_neg_one_to_one(images))
-
-  labels = jnp.uint16(labels.to_numpy())
+  normalized_images = mnist.get_training_data()
 #+end_src
 
 #+RESULTS:
+: 2024-03-06 20:33:52.902441: W external/xla/xla/service/gpu/nvptx_compiler.cc:742] The NVIDIA driver's CUDA version is 12.0 which is older than the ptxas CUDA version (12.4.99). Because the driver is older than the ptxas version, XLA is disabling parallel compilation, which may slow down compilation. You should update your NVIDIA driver or use the NVIDIA-provided CUDA forward compatibility packages.
 
 * Conditional U-Net
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
@@ -437,16 +417,19 @@
 DDPM specific parameters.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import os
+
   SEED=42
   MIN_BETA, MAX_BETA = 1e-4, 0.02
   K = 200
   N_EPOCH = 100
   BATCH_SIZE = 1000
-  PROJECT_DIR='.'
+  PROJECT_DIR=os.path.abspath('.')
 #+end_src
 
 #+RESULTS:
 
+** Training
 We define the functions required for DDPM.
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import jax.numpy as jnp
@@ -686,6 +669,29 @@ epoch 99: 100% 1/1 [02:15<00:00, 135.72s/it]
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import pandas as pd
+  import matplotlib.pyplot as plt
+  import seaborn as sns
+
+  ddpm_loss_log = utils.load_loss_log(f'{PROJECT_DIR}/ddpm_loss_log.npy')
+
+  # plot losses
+  df = pd.DataFrame([(int(x), float(y)) for x, _, y in ddpm_loss_log], columns=['epoch', 'loss'])
+  sns.relplot(df, x='epoch', y='loss', kind='line')
+
+  _ = plt.tight_layout()
+  _ = plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 484
+[[file:./.ob-jupyter/fe801070d33df9b1a96a46af9caf6a4c9ddbb3b6.png]]
+:END:
+
+** Sampling
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import matplotlib.pyplot as plt
   import optax
   from jax import random
@@ -752,3 +758,105 @@ epoch 99: 100% 1/1 [02:15<00:00, 135.72s/it]
 :END:
 
 * CEM
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import os
+
+  SEED=42
+  T=10.
+  K=200
+  BATCH_SIZE = 10
+  PROJECT_DIR=os.path.abspath('.')
+#+end_src
+
+#+RESULTS:
+** Training
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import pandas as pd
+  import matplotlib.pyplot as plt
+  import seaborn as sns
+
+  cem_loss_log = utils.load_loss_log(f'{PROJECT_DIR}/cem_loss_log.npy')
+
+  # plot losses
+  df = pd.DataFrame([(int(x), float(y)) for x, _, y in cem_loss_log], columns=['epoch', 'loss'])
+  sns.relplot(df, x='epoch', y='loss', kind='line')
+
+  _ = plt.tight_layout()
+  _ = plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 484
+[[file:./.ob-jupyter/a8fe1fddcbe71945b7119d50638310db7f51f154.png]]
+:END:
+
+** Sampling
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import matplotlib.pyplot as plt
+  import optax
+  from jax import random
+  import jax.numpy as jnp
+  from tqdm import tqdm
+
+  import utils
+  from unet import Unet
+
+  def sample(state, n, ts, key):
+    # random white noise X_T
+    key, subkey = random.split(key)
+    x_t = random.normal(subkey, shape=(n, 28, 28, 1))
+
+    step=0
+
+    for k in tqdm(range(len(ts))[::-1]):
+      key, subkey = random.split(key)
+      z = random.normal(subkey, shape=x_t.shape)
+
+      t = ts[k]
+      dt = jnp.where(k > 0, t - ts[k-1], 0.)
+
+      f_theta = state.apply_fn(state.params, x_t, t * jnp.ones((n,)))
+
+      # equation (40)
+      s_theta = jnp.where(k > 0, x_t/(1-jnp.exp(-t))  - jnp.exp(-t/2)/(1-jnp.exp(-t)) * f_theta,  0.)
+
+      # equation (24)
+      x_t_bar = x_t - dt * s_theta
+      x_t = jnp.exp(dt/2) * x_t_bar + jnp.sqrt(1-jnp.exp(-dt)) * z
+
+      x_t = jnp.clip(x_t, -1., 1.) # should we clip ...
+      #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
+
+      step=step+1
+
+    return x_t
+
+  key = random.PRNGKey(SEED)
+
+  # use the best params
+  file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
+  cem_state = utils.create_training_state(BATCH_SIZE, params_file=f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{loss}.npy')
+  print(f'using parameters from epoch {epoch} with loss {loss}')
+
+  ts = utils.exponential_time_schedule(T, K)
+
+  # generate x_0 from noise
+  key, subkey = random.split(key)
+  x_0_tilde = sample(cem_state, 4, ts, subkey)
+
+  # plot the data
+  utils.show_img_grid(utils.unnormalize_image(x_0_tilde))
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: using parameters from epoch 9 with loss 0.03557
+: 100% 202/202 [02:55<00:00,  1.15it/s]
+#+attr_org: :width 529
+[[file:./.ob-jupyter/017387eaa1f885b23ceb6ff7f6479cc7fb8be666.png]]
+:END:
