@@ -81,10 +81,10 @@ if __name__ == '__main__':
     LOSS_LOG= f'{PROJECT_DIR}/ddpm_loss_log.npy'
     SEED=42
     BATCH_SIZE=10
-    N_EPOCH=10
+    N_EPOCH=50
     MIN_BETA=1e-4
     MAX_BETA=.02
-    K = 200
+    K = 1000
 
     key = random.PRNGKey(SEED)
     key, key2, key3 = random.split(key, 3)
@@ -97,10 +97,10 @@ if __name__ == '__main__':
         state, epoch_start, step = utils.restore_checkpoint(CHECKPOINT_DIR)
         print(f'restore checkpoint from epoch {epoch_start} and step {step}')
     else:
-        state = utils.create_training_state(BATCH_SIZE, key2)
+        state = utils.create_training_state(BATCH_SIZE, key=key2)
         utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    training_data = mnist.get_training_data()[:1000]
+    training_data = mnist.get_training_data()
 
     betas = jnp.linspace(MIN_BETA, MAX_BETA, K, dtype=jnp.float32) # noise variance
     alphas = 1- betas
