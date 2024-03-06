@@ -9,6 +9,7 @@ import seaborn as sns
 import orbax.checkpoint as ocp
 import optax
 from flax.training import train_state, orbax_utils
+import glob
 
 from unet import Unet
 
@@ -72,7 +73,7 @@ def save_loss_log(loss_log, file_path):
         np.save(f, loss_log)
     return loss_log
 
-def create_training_state(batch_size, key=None):
+def create_training_state(batch_size, params_file=None, key=None):
     if key is None:
         key = random.PRNGKey(42)
 
@@ -87,6 +88,8 @@ def create_training_state(batch_size, key=None):
     optimizer = optax.adam(learning_rate=2e-5)
 
     params = neural_network.init(subkey, jnp.ones([batch_size, 28, 28, 1]), jnp.ones((batch_size,)))
+    if params_file:
+        params = load_pytree(params, params_file)
 
     # Create training state
     state = train_state.TrainState.create(
@@ -153,7 +156,7 @@ def normalize_to_zero_to_one(x):
 def normalize_to_neg_one_to_one(x):
     return normalize_to_zero_to_one(x) * 2 - 1
 
-def unnormalize_image(x):
+def unnormalize_image(xs):
     assert len(xs.shape) == 4
     ys = []
     for x in xs:
