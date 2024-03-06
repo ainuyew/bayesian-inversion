@@ -1,0 +1,639 @@
+#+TITLE: Conditional Expectation Model on Bayesian Inversion problems.
+#+setupfile: ~/.emacs.d/setupfile.org
+
+* Data
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import ssl
+  from sklearn.datasets import fetch_openml
+  import jax.numpy as jnp
+  ssl._create_default_https_context = ssl._create_unverified_context
+
+  def normalize_to_zero_to_one(x):
+    return (x - x.min())/(x.max() - x.min())
+
+  def normalize_to_neg_one_to_one(x):
+    return normalize_to_zero_to_one(x) * 2 - 1
+
+  def unnormalize_image(xs):
+    assert len(xs.shape) == 4
+    ys = []
+    for x in xs:
+      ys.append(normalize_to_zero_to_one(x) * 255) # pixel values to range from 0 to 255
+    return ys
+
+  images, labels = fetch_openml('mnist_784', version=1, return_X_y=True, parser='auto')
+  images = images.to_numpy()
+  images = images.reshape(images.shape[0], 28, 28, 1) # (n, 28, 28, 1)
+  normalized_images = jnp.array(normalize_to_neg_one_to_one(images))
+
+  labels = jnp.uint16(labels.to_numpy())
+#+end_src
+
+#+RESULTS:
+
+* Conditional U-Net
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  from typing import Any, Callable, Sequence, Tuple, List, Optional,Union
+  from einops import rearrange
+  import math
+  from flax.linen.linear import (canonicalize_padding, _conv_dimension_numbers)
+  from flax import linen as nn
+  import jax
+
+  def l2norm(t, axis=1, eps=1e-12):
+      """Performs L2 normalization of inputs over specified axis.
+
+      Args:
+        t: jnp.ndarray of any shape
+        axis: the dimension to reduce, default -1
+        eps: small value to avoid division by zero. Default 1e-12
+      Returns:
+        normalized array of same shape as t
+
+
+      """
+      denom = jnp.clip(jnp.linalg.norm(t, ord=2, axis=axis, keepdims=True), eps)
+      out = t/denom
+      return (out)
+
+
+  class SinusoidalPosEmb(nn.Module):
+      """Build sinusoidal embeddings
+
+      Attributes:
+        dim: dimension of the embeddings to generate
+        dtype: data type of the generated embeddings
+      """
+      dim: int
+      dtype: jnp.dtype = jnp.float32
+
+      @nn.compact
+      def __call__(self, time):
+          """
+          Args:
+            time: jnp.ndarray of shape [batch].
+          Returns:
+            out: embedding vectors with shape `[batch, dim]`
+          """
+          assert len(time.shape) == 1.
+          half_dim = self.dim // 2
+          emb = math.log(10000) / (half_dim - 1)
+          emb = jnp.exp(jnp.arange(half_dim, dtype=self.dtype) * -emb)
+          emb = time.astype(self.dtype)[:, None] * emb[None, :]
+          emb = jnp.concatenate([jnp.sin(emb), jnp.cos(emb)], axis=-1)
+          return emb
+
+  class Downsample(nn.Module):
+
+    dim :Optional[int] = None
+    dtype: Any = jnp.float32
+
+    @nn.compact
+    def __call__(self,x):
+      B, H, W, C = x.shape
+      dim = self.dim if self.dim is not None else C
+      x = nn.Conv(dim, kernel_size = (4,4), strides= (2,2), padding = 1, dtype=self.dtype)(x)
+      assert x.shape == (B, H // 2, W // 2, dim)
+      return(x)
+
+  class Upsample(nn.Module):
+
+    dim: Optional[int] = None
+    dtype: Any = jnp.float32
+
+    @nn.compact
+    def __call__(self,x):
+      B, H, W, C = x.shape
+      dim = self.dim if self.dim is not None else C
+      x = jax.image.resize(x, (B, H * 2, W * 2, C), 'nearest')
+      x = nn.Conv(dim, kernel_size=(3,3), padding=1,dtype=self.dtype)(x)
+      assert x.shape == (B, H * 2, W * 2, dim)
+      return(x)
+
+
+
+  class WeightStandardizedConv(nn.Module):
+      """
+      apply weight standardization  https://arxiv.org/abs/1903.10520
+      """
+      features: int
+      kernel_size: Sequence[int] = 3
+      strides: Union[None, int, Sequence[int]] = 1
+      padding: Any = 1
+      dtype: Any = jnp.float32
+      param_dtype: Any = jnp.float32
+
+
+      @nn.compact
+      def __call__(self, x):
+          """
+          Applies a weight standardized convolution to the inputs.
+
+          Args:
+            inputs: input data with dimensions (batch, spatial_dims..., features).
+
+          Returns:
+            The convolved data.
+          """
+          x = x.astype(self.dtype)
+
+          conv = nn.Conv(
+              features=self.features,
+              kernel_size=self.kernel_size,
+              strides = self.strides,
+              padding=self.padding,
+              dtype=self.dtype,
+              param_dtype = self.param_dtype,
+              parent=None)
+
+          kernel_init = lambda  rng, x: conv.init(rng,x)['params']['kernel']
+          bias_init = lambda  rng, x: conv.init(rng,x)['params']['bias']
+
+          # standardize kernel
+          kernel = self.param('kernel', kernel_init, x)
+          eps = 1e-5 if self.dtype == jnp.float32 else 1e-3
+          # reduce over dim_out
+          redux = tuple(range(kernel.ndim - 1))
+          mean = jnp.mean(kernel, axis=redux, dtype=self.dtype, keepdims=True)
+          var = jnp.var(kernel, axis=redux, dtype=self.dtype, keepdims=True)
+          standardized_kernel = (kernel - mean)/jnp.sqrt(var + eps)
+
+          bias = self.param('bias',bias_init, x)
+
+          return(conv.apply({'params': {'kernel': standardized_kernel, 'bias': bias}},x))
+
+
+  class ResnetBlock(nn.Module):
+      """Convolutional residual block."""
+      dim: int = None
+      groups: Optional[int] = 8
+      dtype: Any = jnp.float32
+
+      @nn.compact
+      def __call__(self, x, time_emb):
+          """
+          Args:
+            x: jnp.ndarray of shape [B, H, W, C]
+            time_emb: jnp.ndarray of shape [B,D]
+          Returns:
+            x: jnp.ndarray of shape [B, H, W, C]
+          """
+
+          B, _, _, C = x.shape
+          assert time_emb.shape[0] == B and len(time_emb.shape) == 2
+
+          h = WeightStandardizedConv(
+              features=self.dim, kernel_size=(3, 3), padding=1, name='conv_0')(x)
+          h =nn.GroupNorm(num_groups=self.groups, dtype=self.dtype, name='norm_0')(h)
+
+          # add in timestep embedding
+          time_emb = nn.Dense(features=2 * self.dim,dtype=self.dtype,
+                             name='time_mlp.dense_0')(nn.swish(time_emb))
+          time_emb = time_emb[:,  jnp.newaxis, jnp.newaxis, :]  # [B, H, W, C]
+          scale, shift = jnp.split(time_emb, 2, axis=-1)
+          h = h * (1 + scale) + shift
+
+          h = nn.swish(h)
+
+          h = WeightStandardizedConv(
+              features=self.dim, kernel_size=(3, 3), padding=1, name='conv_1')(h)
+          h = nn.swish(nn.GroupNorm(num_groups=self.groups, dtype=self.dtype, name='norm_1')(h))
+
+          if C != self.dim:
+              x = nn.Conv(
+                features=self.dim,
+                kernel_size= (1,1),
+                dtype=self.dtype,
+                name='res_conv_0')(x)
+
+          assert x.shape == h.shape
+
+          return x + h
+
+
+  class Attention(nn.Module):
+      heads: int = 4
+      dim_head: int = 32
+      scale: int = 10
+      dtype: Any = jnp.float32
+
+      @nn.compact
+      def __call__(self, x):
+          B, H, W, C = x.shape
+          dim = self.dim_head * self.heads
+
+          qkv = nn.Conv(features= dim * 3, kernel_size=(1, 1),
+                        use_bias=False, dtype=self.dtype, name='to_qkv.conv_0')(x)  # [B, H, W, dim *3]
+          q, k, v = jnp.split(qkv, 3, axis=-1)  # [B, H, W, dim]
+          q, k, v = map(lambda t: rearrange(
+              t, 'b x y (h d) -> b (x y) h d', h=self.heads), (q, k, v))
+
+          assert q.shape == k.shape == v.shape == (
+              B, H * W, self.heads, self.dim_head)
+
+          q, k = map(l2norm, (q, k))
+
+          sim = jnp.einsum('b i h d, b j h d -> b h i j', q, k) * self.scale
+          attn = nn.softmax(sim, axis=-1)
+          assert attn.shape == (B, self.heads, H * W,  H * W)
+
+          out = jnp.einsum('b h i j , b j h d  -> b h i d', attn, v)
+          out = rearrange(out, 'b h (x y) d -> b x y (h d)', x=H)
+          assert out.shape == (B, H, W, dim)
+
+          out = nn.Conv(features=C, kernel_size=(1, 1), dtype=self.dtype, name='to_out.conv_0')(out)
+          return (out)
+
+
+  class LinearAttention(nn.Module):
+      heads: int = 4
+      dim_head: int = 32
+      dtype: Any = jnp.float32
+
+      @nn.compact
+      def __call__(self, x):
+          B, H, W, C = x.shape
+          dim = self.dim_head * self.heads
+
+          qkv = nn.Conv(
+              features=dim * 3,
+              kernel_size=(1, 1),
+              use_bias=False,
+              dtype=self.dtype,
+              name='to_qkv.conv_0')(x)  # [B, H, W, dim *3]
+          q, k, v = jnp.split(qkv, 3, axis=-1)  # [B, H, W, dim]
+          q, k, v = map(lambda t: rearrange(
+              t, 'b x y (h d) -> b (x y) h d', h=self.heads), (q, k, v))
+          assert q.shape == k.shape == v.shape == (
+              B, H * W, self.heads, self.dim_head)
+          # compute softmax for q along its embedding dimensions
+          q = nn.softmax(q, axis=-1)
+          # compute softmax for k along its spatial dimensions
+          k = nn.softmax(k, axis=-3)
+
+          q = q/jnp.sqrt(self.dim_head)
+          v = v / (H * W)
+
+          context = jnp.einsum('b n h d, b n h e -> b h d e', k, v)
+          out = jnp.einsum('b h d e, b n h d -> b h e n', context, q)
+          out = rearrange(out, 'b h e (x y) -> b x y (h e)', x=H)
+          assert out.shape == (B, H, W, dim)
+
+          out = nn.Conv(features=C, kernel_size=(1, 1),  dtype=self.dtype, name='to_out.conv_0')(out)
+          out = nn.LayerNorm(epsilon=1e-5, use_bias=False, dtype=self.dtype, name='to_out.norm_0')(out)
+          return (out)
+
+  class AttnBlock(nn.Module):
+      heads: int = 4
+      dim_head: int = 32
+      use_linear_attention: bool = True
+      dtype: Any = jnp.float32
+
+
+      @nn.compact
+      def __call__(self, x):
+        B, H, W, C = x.shape
+        normed_x = nn.LayerNorm(epsilon=1e-5, use_bias=False,dtype=self.dtype)(x)
+        if self.use_linear_attention:
+          attn = LinearAttention(self.heads, self.dim_head, dtype=self.dtype)
+        else:
+          attn = Attention(self.heads, self.dim_head, dtype=self.dtype)
+        out = attn(normed_x)
+        assert out.shape == (B, H, W, C)
+        return(out + x)
+
+
+  class Unet(nn.Module):
+      dim: int
+      init_dim: Optional[int] = None # if None, same as dim
+      out_dim: Optional[int] = None
+      dim_mults: Tuple[int, int, int, int] = (1, 2, 4, 8)
+      resnet_block_groups: int = 8
+      learned_variance: bool = False
+      dtype: Any = jnp.float32
+
+
+      @nn.compact
+      def __call__(self, x, time):
+          B, H, W, C = x.shape
+
+          init_dim = self.dim if self.init_dim is None else self.init_dim
+          hs = []
+          h = nn.Conv(
+              features= init_dim,
+              kernel_size=(7, 7),
+              padding=3,
+              name='init.conv_0',
+              dtype = self.dtype)(x)
+
+          hs.append(h)
+          # use sinusoidal embeddings to encode timesteps
+          time_emb = SinusoidalPosEmb(self.dim, dtype=self.dtype)(time)  # [B, dim] (64, ) --> (64, 64)
+          time_emb = nn.Dense(features=self.dim * 4, dtype=self.dtype, name='time_mlp.dense_0')(time_emb) # (64, 64) --> (64, 256)
+          time_emb = nn.Dense(features=self.dim * 4, dtype=self.dtype, name='time_mlp.dense_1')(nn.gelu(time_emb))  # [B, 4*dim] (64, 256) --> (64, 256)
+
+          # downsampling
+          num_resolutions = len(self.dim_mults)
+          for ind in range(num_resolutions):
+            dim_in = h.shape[-1]
+            h = ResnetBlock(
+              dim=dim_in, groups=self.resnet_block_groups, dtype=self.dtype, name=f'down_{ind}.resblock_0')(h, time_emb)
+            hs.append(h)
+
+            h = ResnetBlock(dim=dim_in, groups=self.resnet_block_groups, dtype=self.dtype, name=f'down_{ind}.resblock_1')(h, time_emb)
+            h = AttnBlock(dtype=self.dtype, name=f'down_{ind}.attnblock_0')(h)
+            hs.append(h)
+
+            if ind < num_resolutions -1:
+              h = Downsample(dim=self.dim * self.dim_mults[ind], dtype=self.dtype, name=f'down_{ind}.downsample_0')(h)
+
+          mid_dim = self.dim * self.dim_mults[-1]
+          h = nn.Conv(features = mid_dim, kernel_size = (3,3), padding=1, dtype=self.dtype, name=f'down_{num_resolutions-1}.conv_0')(h)
+
+
+          # middle
+          h =  ResnetBlock(dim= mid_dim, groups= self.resnet_block_groups, dtype=self.dtype, name = 'mid.resblock_0')(h, time_emb)
+          h = AttnBlock(use_linear_attention=False, dtype=self.dtype, name = 'mid.attenblock_0')(h)
+          h = ResnetBlock(dim= mid_dim, groups= self.resnet_block_groups, dtype=self.dtype, name = 'mid.resblock_1')(h, time_emb)
+
+          # upsampling
+          for ind in reversed(range(num_resolutions)):
+
+             dim_in = self.dim * self.dim_mults[ind]
+             dim_out = self.dim * self.dim_mults[ind-1] if ind >0 else init_dim
+
+             assert h.shape[-1] == dim_in
+             h = jnp.concatenate([h, hs.pop()], axis=-1)
+             assert h.shape[-1] == dim_in + dim_out
+             h = ResnetBlock(dim=dim_in, groups=self.resnet_block_groups, dtype=self.dtype, name=f'up_{ind}.resblock_0')(h, time_emb)
+
+             h = jnp.concatenate([h, hs.pop()], axis=-1)
+             assert h.shape[-1] == dim_in + dim_out
+             h = ResnetBlock(dim=dim_in, groups=self.resnet_block_groups, dtype=self.dtype, name=f'up_{ind}.resblock_1')(h, time_emb)
+             h = AttnBlock(dtype=self.dtype, name=f'up_{ind}.attnblock_0')(h)
+
+             assert h.shape[-1] == dim_in
+             if ind > 0:
+               h = Upsample(dim = dim_out, dtype=self.dtype, name = f'up_{ind}.upsample_0')(h)
+
+          h = nn.Conv(features = init_dim, kernel_size=(3,3), padding=1, dtype=self.dtype, name=f'up_0.conv_0')(h)
+
+          # final
+          h = jnp.concatenate([h, hs.pop()], axis=-1)
+          assert h.shape[-1] == init_dim * 2
+
+          out = ResnetBlock(dim=self.dim,groups=self.resnet_block_groups, dtype=self.dtype, name = 'final.resblock_0' )(h, time_emb)
+
+          default_out_dim = C * (1 if not self.learned_variance else 2)
+          out_dim = default_out_dim if self.out_dim is None else self.out_dim
+
+          return(nn.Conv(out_dim, kernel_size=(1,1), dtype=self.dtype, name= 'final.conv_0')(out))
+
+#+end_src
+
+#+RESULTS:
+
+* DDPM
+DDPM specific parameters.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  SEED=42
+  MIN_BETA, MAX_BETA = 1e-4, 0.02
+  K = 1000
+  N_EPOCH = 10
+  BATCH_SIZE = 100
+#+end_src
+
+#+RESULTS:
+
+We define the functions required for DDPM.
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import jax.numpy as jnp
+  from jax import jit, random, value_and_grad
+  from flax.training import train_state
+
+  @jit
+  def ddpm_forward_process(x_0, a_bar_k, eta):
+    return jnp.sqrt(a_bar_k) * x_0 + jnp.sqrt(1 - a_bar_k) * eta
+
+  @jit
+  def train_step(state: train_state, key, ks, alpha_bars, x_0_batch):
+      @jit
+      def mse_loss(params, inputs, noise_level, targets) -> jnp.float32:
+        n = targets.shape[0] # n is the batch size
+
+        # predict_fn is a function that returns the neural network's predictions
+        predictions = state.apply_fn(params, inputs, noise_level)
+
+        # flatten the data before calculating the difference
+        diffs = predictions.reshape((n, -1)) - targets.reshape((n, -1))
+
+        # calculate mean loss per sample before calculating the average for the batch
+        # if the sample size are identical, then we can perform a one step average
+        return (diffs * diffs).mean(axis=1).mean()
+
+      # regenerate a new random keys
+      key, key2, key3 = random.split(key, 3)
+
+      n = x_0_batch.shape[0] # number of samples in batch
+
+      # generate n random noise variance \varkappa for forward process
+      # MLP can only work with a single noise level per batch
+      noise_level = random.choice(key2, ks, shape=(n, )) # (n, )
+
+      # map alpha_bars associated to each random noise variance
+      alpha_bar = alpha_bars[noise_level, None, None, None] # (n,) -> (n, 1, 1, 1)
+
+      # random Gaussian noise for forward process
+      eta = random.normal(key3, shape=x_0_batch.shape)
+
+      # calculate X_\varkappa
+      x_k = ddpm_forward_process(x_0_batch, alpha_bar, eta)
+
+      # calculate losses and gradients from loss function
+      loss, grads = value_and_grad(mse_loss)(state.params, x_k, noise_level, eta)
+
+      # return state with updated weights of neural network from calculated gradients
+      return state.apply_gradients(grads=grads), loss
+#+end_src
+
+#+RESULTS:
+
+This is where we train the model.
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import optax
+  from flax.training import orbax_utils, train_state
+  from tqdm import tqdm
+  import pandas as pd
+  import seaborn as sns
+  import numpy as np
+  import matplotlib.pyplot as plt
+
+  key = random.PRNGKey(SEED)
+
+  X_0 = normalized_images[:1000]
+  n_batch = X_0.shape[0] // BATCH_SIZE
+
+  betas = jnp.linspace(MIN_BETA, MAX_BETA, K, dtype=jnp.float32) # noise variance
+  alphas = 1- betas
+  alpha_bars = jnp.cumprod(alphas)
+  ks = jnp.array(range(len(betas))) # noise variance indexes
+  training_loss = []
+
+  # create training state
+  unet = Unet(
+      dim=64,
+      dim_mults = (1, 2, 4,),
+  )
+  optimizer = optax.adam(learning_rate=2e-5)
+  key, subkey = random.split(key)
+  params = unet.init(subkey, jnp.ones([BATCH_SIZE, 28, 28, 1]), jnp.ones((BATCH_SIZE,)))
+  state = train_state.TrainState.create(
+      apply_fn = unet.apply,
+      params = params,
+      tx=optimizer
+  )
+
+  for epoch in range(N_EPOCH):
+      key, subkey = random.split(key)
+
+      epoch_loss = []
+
+      # randomize the sample into batches that covers everything
+      perms = random.permutation(subkey, X_0.shape[0])
+      perms = perms[: n_batch * BATCH_SIZE] # skip incomplete batch
+      perms = perms.reshape((n_batch, BATCH_SIZE))
+
+      for perm in tqdm(perms, desc=f'epoch {epoch}'):
+
+          # randomly pick a subset of the entire sample size
+          X_0_batch = X_0[perm, ...]
+
+          key, subkey = random.split(key)
+
+          state, loss = train_step(state, subkey, ks, alpha_bars, X_0_batch)
+
+          epoch_loss.append(loss)
+
+      training_loss.append(np.mean(epoch_loss))
+
+  # plot average epoch losses
+  df = pd.DataFrame(training_loss)
+  sns.lineplot(df)
+  _ = plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+begin_example
+  epoch 0: 100% 10/10 [01:24<00:00,  8.49s/it]
+
+  epoch 1: 100% 10/10 [00:43<00:00,  4.37s/it]
+
+  epoch 2: 100% 10/10 [00:42<00:00,  4.27s/it]
+
+  epoch 3: 100% 10/10 [00:42<00:00,  4.21s/it]
+
+  epoch 4: 100% 10/10 [00:41<00:00,  4.17s/it]
+epoch 5: 100% 10/10 [00:42<00:00,  4.25s/it]
+epoch 6: 100% 10/10 [00:42<00:00,  4.26s/it]
+epoch 7: 100% 10/10 [00:42<00:00,  4.22s/it]
+epoch 8: 100% 10/10 [00:43<00:00,  4.37s/it]
+epoch 9: 100% 10/10 [00:41<00:00,  4.15s/it]
+#+end_example
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mNameError[0m                                 Traceback (most recent call last)
+: Cell [0;32mIn[23], line 59[0m
+: [1;32m     57[0m df [38;5;241m=[39m pd[38;5;241m.[39mDataFrame(training_loss)
+: [1;32m     58[0m sns[38;5;241m.[39mlineplot(df)
+: [0;32m---> 59[0m _ [38;5;241m=[39m [43mplt[49m[38;5;241m.[39mshow()
+:
+: [0;31mNameError[0m: name 'plt' is not defined
+#+attr_org: :width 547
+[[file:./.ob-jupyter/befbb1442256e848ad870df435a57d3da8fefbe7.png]]
+:END:
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import matplotlib.pyplot as plt
+
+  def sample(state, n, betas, key):
+    # random white noise X_T
+    key, subkey = random.split(key)
+    x_t = random.normal(subkey, shape=(n, 28, 28, 1))
+
+    #dts = np.array([ts[i] - ts[i-1] for i in range(1, steps+1)])
+    #betas = 1- np.exp(-dts)
+    alphas = 1 - betas
+    alpha_bars = jnp.cumprod(alphas)
+    #alpha_bars = jnp.array([alphas[:i+1].prod() for i in range(len(alphas))]) # workaround for metal problem with jnp.cumprod
+
+    # sample in reverse from T=10 to 0.0 in evenly distributed steps
+    #for i in tqdm(range(steps)[::-1]):
+    for t in tqdm(range(len(betas))[::-1]):
+      alpha = alphas[t]
+      beta = betas[t]
+      alpha_bar_t = alpha_bars[t]
+
+      #t = ts[i+1] * jnp.ones((x_t.shape[0], ))
+      key, subkey = random.split(key)
+      z = random.normal(subkey, shape=x_t.shape)
+      sigma_t = jnp.sqrt(beta) # option 1; see DDPM 3.2
+      #sigma_t = jnp.sqrt((1-alpha_bars[t-1])/(1 - alpha_bar_t) * beta) # option 2; see DDPM 3.2
+
+      x_t = 1/jnp.sqrt(alpha) * (x_t - beta/jnp.sqrt(1 - alpha_bar_t) * state.apply_fn(state.params, x_t, t * jnp.ones((x_t.shape[0], )))) + sigma_t * z
+
+      x_t = jnp.clip(x_t, -1., 1.) # should we clip ...
+      #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
+
+    return x_t
+
+  #state, epoch, step = restore_checkpoint(f'{PROJECT_DIR}/ddpm')
+  #print(f'restore checkpoint from epoch {epoch} and step {step}')
+
+  # use the best params
+  #file_path, epoch, step, loss = find_latest_pytree(f'{PROJECT_DIR}/mnist_ddpm_params_*.npy')
+  #params = load_pytree(state.params, file_path)
+  #print(f'using parameters from epoch {epoch} with loss {loss}')
+
+  key = random.PRNGKey(SEED)
+  key, subkey = random.split(key)
+
+  betas = jnp.linspace(MIN_BETA, MAX_BETA, K)
+
+  # generate x_0 from noise
+  x_0_tilde = sample(state, 4, betas, subkey)
+
+  # plot the data
+  imgs = unnormalize_image(x_0_tilde)
+
+  """Shows a grid of images."""
+  n = int(np.ceil(len(imgs)**.5))
+  _, axs = plt.subplots(n, n, figsize=(3 * n, 3 * n))
+  _ = plt.tight_layout()
+
+  for i, (img, title) in enumerate(zip(imgs, titles)):
+    show_img(img, axs[i // n][i % n], title)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: 100% 1000/1000 [06:05<00:00,  2.74it/s]
+:
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mNameError[0m                                 Traceback (most recent call last)
+: Cell [0;32mIn[26], line 58[0m
+: [1;32m     55[0m _, axs [38;5;241m=[39m plt[38;5;241m.[39msubplots(n, n, figsize[38;5;241m=[39m([38;5;241m3[39m [38;5;241m*[39m n, [38;5;241m3[39m [38;5;241m*[39m n))
+: [1;32m     56[0m _ [38;5;241m=[39m plt[38;5;241m.[39mtight_layout()
+: [0;32m---> 58[0m [38;5;28;01mfor[39;00m i, (img, title) [38;5;129;01min[39;00m [38;5;28menumerate[39m([38;5;28mzip[39m(imgs, [43mtitles[49m)):
+: [1;32m     59[0m   show_img(img, axs[i [38;5;241m/[39m[38;5;241m/[39m n][i [38;5;241m%[39m n], title)
+:
+: [0;31mNameError[0m: name 'titles' is not defined
+[[file:./.ob-jupyter/204f2e46c7bbceda21aabd2a27487ded3f668a39.png]]
+:END:
+
+* CEM
