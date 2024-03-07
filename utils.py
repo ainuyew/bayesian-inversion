@@ -73,7 +73,7 @@ def save_loss_log(loss_log, file_path):
         np.save(f, loss_log)
     return loss_log
 
-def create_training_state(batch_size, params_file=None, key=None):
+def create_training_state(params_file=None, key=None):
     if key is None:
         key = random.PRNGKey(42)
 
@@ -87,7 +87,7 @@ def create_training_state(batch_size, params_file=None, key=None):
    # optimizer = optax.adam(learning_rate=1e-4, b1=.9, b2=.99, eps=1e-8)
     optimizer = optax.adam(learning_rate=2e-5)
 
-    params = neural_network.init(subkey, jnp.ones([batch_size, 28, 28, 1]), jnp.ones((batch_size,)))
+    params = neural_network.init(subkey, jnp.ones([1, 28, 28, 1]), jnp.ones((1,)))
     if params_file:
         params = load_pytree(params, params_file)
 
@@ -103,21 +103,30 @@ def create_training_state(batch_size, params_file=None, key=None):
 def save_checkpoint(file_path, state, epoch, step):
     #ocp.test_utils.create_empty(PROJECT_DIR) # ensure directory exists before saving
     #ckptr = ocp.Checkpointer(orbax.checkpoint.PyTreeCheckpointHandler())  # A stateless object, can be created on the fly.
-    ckptr = ocp.StandardCheckpointer()
-    ckpt = {'model': state, 'epoch': epoch, 'step': step}
+    ckptr = ocp.Checkpointer(ocp.CompositeCheckpointHandler('state', 'metadata'))
+    #ckpt = {'model': state, 'epoch': epoch, 'step': step}
+    metadata = {
+        'epoch': epoch,
+        'step': step
+        }
     #args = orbax_utils.save_args_from_target(ckpt) # TODO this is deprecated. https://orbax.readthedocs.io/en/latest/custom_handlers.html#typehandler
     #ckptr.save(file_path, ckpt, save_args=args, force=True)
-    ckptr.save(file_path, ckpt, force=True)
+    ckptr.save(file_path,
+               args=ocp.args.Composite(
+                   state=ocp.args.StandardSave(state),
+                   metadata=ocp.args.JsonSave(metadata),
+               ),
+               force=True)
 
 def restore_checkpoint(file_path, key=None):
     #ckptr = ocp.Checkpointer(orbax.checkpoint.PyTreeCheckpointHandler())  # A stateless object, can be created on the fly.
-    ckptr = ocp.StandardCheckpointer()
-    ckpt = {'model': create_training_state(key), 'epoch': -1, 'step': -1}
+    ckptr = ocp.Checkpointer(ocp.CompositeCheckpointHandler('state', 'metadata'))
+    #ckpt = {'model': create_training_state(key), 'epoch': -1, 'step': -1}
     #args = orbax_utils.restore_args_from_target(ckpt, mesh=None)
-    args = ocp.args.StandardSave(ckpt)
+    #args = ocp.args.StandardSave(ckpt)
     #ckpt = ckptr.restore(file_path, item=ckpt, restore_args = args)
-    ckpt = ckptr.restore(file_path, restore_args=args)
-    return ckpt['model'], ckpt['epoch'], ckpt['step']
+    ckpt = ckptr.restore(file_path)
+    return ckpt.state, ckpt.metadata['epoch'], ckpt.metadata['step']
 
 # Helper functions for images.
 def show_img(img, ax=None, title=None):

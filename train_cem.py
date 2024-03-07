@@ -103,7 +103,7 @@ if __name__ == '__main__':
         state, epoch_start, step = utils.restore_checkpoint(CHECKPOINT_DIR)
         print(f'restore checkpoint from epoch {epoch_start} and step {step}')
     else:
-        state = utils.create_training_state(BATCH_SIZE, key=key2)
+        state = utils.create_training_state(key=key2)
         utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
     training_data = mnist.get_training_data()[:1000]

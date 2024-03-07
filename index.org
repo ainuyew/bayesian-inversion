@@ -421,9 +421,9 @@ DDPM specific parameters.
 
   SEED=42
   MIN_BETA, MAX_BETA = 1e-4, 0.02
-  K = 200
-  N_EPOCH = 100
-  BATCH_SIZE = 1000
+  K = 1000
+  N_EPOCH = 30
+  BATCH_SIZE = 10
   PROJECT_DIR=os.path.abspath('.')
 #+end_src
 
@@ -735,7 +735,7 @@ epoch 99: 100% 1/1 [02:15<00:00, 135.72s/it]
 
   # use the best params
   file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/ddpm_params_*.npy')
-  ddpm_state = utils.create_training_state(BATCH_SIZE, params_file=f'{PROJECT_DIR}/ddpm_params_{epoch}_{step}_{loss}.npy')
+  ddpm_state = utils.create_training_state(params_file=f'{PROJECT_DIR}/ddpm_params_{epoch}_{step}_{loss}.npy')
   print(f'using parameters from epoch {epoch} with loss {loss}')
 
   betas = jnp.linspace(MIN_BETA, MAX_BETA, K)
@@ -750,11 +750,11 @@ epoch 99: 100% 1/1 [02:15<00:00, 135.72s/it]
 
 #+RESULTS:
 :RESULTS:
-: using parameters from epoch 9 with loss 0.14745
-: 100% 200/200 [01:12<00:00,  2.75it/s]
-:
-#+attr_org: :width 534
-[[file:./.ob-jupyter/6b3f6df30b49f3dd621897855d66e721ef554ccd.png]]
+: 2024-03-07 08:56:45.170093: W external/xla/xla/service/gpu/nvptx_compiler.cc:742] The NVIDIA driver's CUDA version is 12.0 which is older than the ptxas CUDA version (12.4.99). Because the driver is older than the ptxas version, XLA is disabling parallel compilation, which may slow down compilation. You should update your NVIDIA driver or use the NVIDIA-provided CUDA forward compatibility packages.
+: using parameters from epoch 8 with loss 0.02443
+: 100% 1000/1000 [14:06<00:00,  1.18it/s]
+#+attr_org: :width 529
+[[file:./.ob-jupyter/366e5ecd5190dcfa0dfd0afc39a52d418f35ab5e.png]]
 :END:
 
 * CEM
@@ -764,8 +764,8 @@ epoch 99: 100% 1/1 [02:15<00:00, 135.72s/it]
 
   SEED=42
   T=10.
-  K=200
-  BATCH_SIZE = 10
+  K=1000
+  BATCH_SIZE = 1000
   PROJECT_DIR=os.path.abspath('.')
 #+end_src
 
@@ -840,7 +840,7 @@ epoch 99: 100% 1/1 [02:15<00:00, 135.72s/it]
 
   # use the best params
   file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
-  cem_state = utils.create_training_state(BATCH_SIZE, params_file=f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{loss}.npy')
+  cem_state = utils.create_training_state(params_file=f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{loss}.npy')
   print(f'using parameters from epoch {epoch} with loss {loss}')
 
   ts = utils.exponential_time_schedule(T, K)
