@@ -19,7 +19,7 @@ def forward_process(x_0, t, eta):
     # equation 17
     return x_0 * jnp.exp(-t/2).reshape((n, 1, 1, 1)) + eta * jnp.sqrt(1-jnp.exp(-t)).reshape((n, 1, 1, 1))
 
-def fit(state, training_data, time_schedule, key, batch_size, n_epoch, step=0, epoch_start=0):
+def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience, step=0, epoch_start=0):
     @jit
     def lambda_t(t):
         return jnp.where(t>0.0, t/(jnp.exp(t)-1.), jnp.ones(t.shape))
@@ -39,6 +39,7 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, step=0, e
     loss_log = None
     best_loss = 1.
     predict_fn = state.apply_fn
+    n_stale_epoch=1
 
     ks = jnp.array(range(len(time_schedule)))
 
@@ -79,6 +80,12 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, step=0, e
       if epoch_loss < best_loss:
           best_loss = epoch_loss
           utils.save_pytree(state.params, f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{best_loss:.5f}')
+          n_stale_epoch = 1
+      else if n_stale_epoch < patience:
+          n_stale_epoch += 1
+      else:
+          print(f'stop training early after {epoch} epochs with a best loss of {best_loss} ')
+          return state
 
     return state
 
@@ -91,6 +98,7 @@ if __name__ == '__main__':
     N_EPOCH=10
     T = 10.
     K = 200
+    PATIENCE=5
 
     key = random.PRNGKey(SEED)
     key, key2, key3 = random.split(key, 3)
@@ -110,7 +118,7 @@ if __name__ == '__main__':
     time_schedule = utils.exponential_time_schedule(T, K)[1:] # ignore 0.0
 
     start = time.time()
-    state = fit(state, training_data, time_schedule, key3, BATCH_SIZE, N_EPOCH, step=step+1, epoch_start=epoch_start+1)
+    state = fit(state, training_data, time_schedule, key3, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
     end = time.time()
 
     print(f'elapsed: {end - start}s')

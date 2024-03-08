@@ -17,7 +17,7 @@ def forward_process(x_0, a_bar_k, eta):
 
     return jnp.sqrt(a_bar_k) * x_0 + jnp.sqrt(1 - a_bar_k) * eta
 
-def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, step=0, epoch_start=0):
+def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience, step=0, epoch_start=0):
     @jit
     def mse_loss(params, inputs, k, targets) -> jnp.float32:
         assert inputs.shape[0] == k.shape[0]
@@ -32,6 +32,7 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, step=0, 
 
     loss_log = None
     best_loss = 1.
+    n_stale_epoch=1
 
     for epoch in range(epoch_start, n_epoch):
       key, subkey = random.split(key)
@@ -72,6 +73,12 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, step=0, 
       if epoch_loss < best_loss:
           best_loss = epoch_loss
           utils.save_pytree(state.params, f'{PROJECT_DIR}/ddpm_params_{epoch}_{step}_{best_loss:.5f}')
+          n_stale_epoch=1
+      else if n_stale_epoch < patience:
+          n_stale_epoch += 1
+      else:
+          print(f'stop training early after {epoch} epochs with a best loss of {best_loss} ')
+          return state
 
     return state
 
@@ -85,6 +92,7 @@ if __name__ == '__main__':
     MIN_BETA=1e-4
     MAX_BETA=.02
     K = 1000
+    PATIENCE=5
 
     key = random.PRNGKey(SEED)
     key, key2, key3 = random.split(key, 3)
@@ -108,7 +116,7 @@ if __name__ == '__main__':
     ks = jnp.array(range(len(betas))) # noise variance indexes
 
     start = time.time()
-    state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, step=step+1, epoch_start=epoch_start+1)
+    state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, patience, step=step+1, epoch_start=epoch_start+1)
     end = time.time()
 
     print(f'elapsed: {end - start}s')

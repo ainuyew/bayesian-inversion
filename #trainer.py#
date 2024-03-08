@@ -1,0 +1,61 @@
+CHECKPOINT_DIR='/tmp/checkpoint'
+
+@jit
+def step(key, state, batch_data, loss_fn):
+    # regenerate a new random keys
+    key, key2, key3 = random.split(key, 3)
+
+    t = random.choice(key2, time_schedule, shape=(batch_data.shape[0],))
+    eta = random.normal(key3, shape=batch_data.shape)
+
+    training_inputs = forward_process(x_0_batch, t, eta)
+    training_targets = x_0_batch
+
+    loss, grads = value_and_grad(loss_fn)(state.params, training_inputs, t, training_targets)
+
+    state = state.apply_gradients(grads=grads)
+
+    step = step+1
+    loss_log.append((epoch, step, loss))
+
+    return state
+
+def fit(key, state, training_data, batch_size, n_epoch, patience, loss_fn, step=0. epoch_start=0):
+    for epoch in range(epoch_start, n_epoch):
+        key, subkey = random.split(key)
+        perms = random.permutation(subkey, training_data.shape[0])
+        perms = perms[: n_batch * batch_size] # skip incomplete batch
+        perms = perms.reshape((n_batch, batch_size))
+
+        loss_log = []
+
+        for perm in tqdm(perms, desc=f'epoch {epoch}'):
+            # randomly pick a subset of the entire sample size
+            x_0_batch = training_data[perm, ...]
+
+            # regenerate a new random keys
+            key, key2, key3 = random.split(key, 3)
+
+            t = random.choice(key2, time_schedule, shape=(x_0_batch.shape[0],))
+            eta = random.normal(key3, shape=x_0_batch.shape)
+
+            training_inputs = forward_process(x_0_batch, t, eta)
+            training_targets = x_0_batch
+
+            loss, grads = value_and_grad(loss_fn)(state.params, training_inputs, t, training_targets)
+
+            state = state.apply_gradients(grads=grads)
+
+            step = step+1
+            loss_log.append((epoch, step, loss))
+
+        utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
+        utils.save_loss_log(loss_log, LOSS_LOG)
+
+        epoch_loss = np.mean([loss for _, _, loss in loss_log])
+
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            utils.save_pytree(state.params, f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{best_loss:.5f}')
+
+    return state
