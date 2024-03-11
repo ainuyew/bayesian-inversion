@@ -4,20 +4,21 @@ import numpy as np
 from pathlib import Path
 import os
 import zipfile
-from io import TextIOWrapper
+from io import BytesIO, TextIOWrapper
 
 def unzip(zip_path):
     with zipfile.ZipFile(zip_path) as zf:
         files = []
         for file_name in zf.namelist():
             print(file_name)
-            if file_name.endswith('.dcm'):
-                with TextIOWrapper(zf.open(file_name)) as f:
-                    #file_string = f.read()
-                    #file_string.seek(0)
-                    dcm = dcmread(fp=f)
-                name = os.path.basename(file_name)
-                files.append((name, dcm))
+            if not file_name.endswith('.dcm'):
+                continue
+
+            with zf.open(file_name) as file_object:
+                file_bytes = file_object.read()
+                dcm = dcmread(BytesIO(file_bytes))
+            name = os.path.basename(file_name)
+            files.append((name, dcm))
     return files
 
 def get_training_data(folder):
@@ -32,7 +33,8 @@ def get_training_data(folder):
 
 
 def main():
-  path='/Volumes/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
+  #path='/Volumes/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
+    path='/media/huiyuanchua/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
   print(unzip(path))
 
 if __name__ == '__main__':
