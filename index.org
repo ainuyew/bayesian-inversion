@@ -2,7 +2,9 @@
 #+setupfile: ~/.emacs.d/setupfile.org
 
 * Problem Statement
-This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans to higher quality CT scans similar to the normal dose images. CT scans will produce sinograms through forward projection algorithm. We reconstruct a 3D image through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
+This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
+
+In a CT scan of a 3D subject, multiple 2D projections are generated for each angle of projection. Projections are created by the forward projection algorithm,and measures the attenutation (reduction in intensity) of the x-ray beam (cast no the subject towards the deector). A sinogram consist of mutiple projections stacked together. We can then reconstruct a 3D image of the subject of interest through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
 
 [cite:@moen2021_low-dose_ct_image] provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections.
 
@@ -20,7 +22,12 @@ The second option (called Filtered Back Projection or FBP) is the most common as
 - https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
 - https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
 - https://github.com/Feanor007/Thin2Thick
-
+- https://pypi.org/project/algotom/
+- https://github.com/cabouman/OpenMBIR-Index/blob/master/README.md
+- https://humanhealth.iaea.org/HHW/MedicalPhysics/NuclearMedicine/ImageAnalysis/3Dimagereconstruction/index.html
+- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/ Pyro-NN
+- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4181643/ TomoPy
+- http://www.sci.utah.edu/~shireen/pdfs/tutorials/Elhabian_CT09.pdf
 * Data
 We use data from 2016 Low Dose CT Grand Challenge (https://www.aapm.org/grandchallenge/lowdosect/#testDatasets). Training data is downloaded from box at https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h. (https://www.imagewisely.org/Imaging-Modalities/Computed-Tomography/Image-Reconstruction-Techniques) The data contains images reconstructed using two reconstruction kernels B30 and D45. Reconstruction kernels (also called “filter” or “algorithm”) affects the image quality. There is a tradeoff between spatial resolution and noise. A smoother kernel generates images with lower noise but with reduced spatial resolution. A sharper kernel generates images with higher spatial resolution, but increases the image noise. Spatial resolution in CT is the ability to differentiate objects of different density. A high spatial resolution is important to distinguish objects that are close to one another.
 
