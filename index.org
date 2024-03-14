@@ -1,10 +1,31 @@
 #+TITLE: Examination of DDPM and CEM on Bayesian Inversion problems.
 #+setupfile: ~/.emacs.d/setupfile.org
 
-This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems.
+* Problem Statement
+This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans to higher quality CT scans similar to the normal dose images. CT scans will produce sinograms through forward projection algorithm. We reconstruct a 3D image through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
+
+[cite:@moen2021_low-dose_ct_image] provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections.
+
+** Filtered Back Projection (FBP)
+Found a site on filtered back projection https://howradiologyworks.com/filtered-backprojection-fbp-illustrated-guide-for-radiologic-technologists/#:~:text=Back%20projection%20is%20the%20process,Filtered%20Backprojection%20and%20Iterative%20Reconstruction. A traditional x-ray scan gives us a 2d image of a subject of interest from a view (usually in front of the patient for a chest scan). One 2d image does not provide us a very good understanding of the subject. A forward projection algorithm instead takes multiple 2d images of a the subject from multiple and different angles/views. The end results are _sinograms_. Each line/row in a sinogram corresponds to 2d image taken of the subject at particular view. A sinogram is so named because each point in the subject corresponds traces a sinusoid curve.
+
+Given knowledge of how a forward projection works, we can reverse the process (which we call back projection) to reconstruct an image of the subject. Because the back projection (BP) is performed one view at a time, the resulting reconstructed image is a blurred image (https://www.youtube.com/watch?v=YvYIkbiRMy0). To remedy this problem, we can apply a sharpening step (or image deblurring). This image deblurring can be applied in three different manner:
+1. BP projection to image then apply image de-blur
+2. De-blur projection then BP to image
+3. De-blur projection, BP to image, then finally de-blur again
+The second option (called Filtered Back Projection or FBP) is the most common as it is fast and robust. Back projection is the process of mapping the data from the detector space to the image space, while forward projection is the process of mapping the data in the image space to the detector space.
+
+** References
+- http://xrayphysics.com/ctsim.html
+- https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
+- https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
+- https://github.com/Feanor007/Thin2Thick
 
 * Data
-We use data from 2016 Low Dose CT Grand Challenge (https://www.aapm.org/grandchallenge/lowdosect/#testDatasets). Training data is downloaded from box at https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h.
+We use data from 2016 Low Dose CT Grand Challenge (https://www.aapm.org/grandchallenge/lowdosect/#testDatasets). Training data is downloaded from box at https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h. (https://www.imagewisely.org/Imaging-Modalities/Computed-Tomography/Image-Reconstruction-Techniques) The data contains images reconstructed using two reconstruction kernels B30 and D45. Reconstruction kernels (also called “filter” or “algorithm”) affects the image quality. There is a tradeoff between spatial resolution and noise. A smoother kernel generates images with lower noise but with reduced spatial resolution. A sharper kernel generates images with higher spatial resolution, but increases the image noise. Spatial resolution in CT is the ability to differentiate objects of different density. A high spatial resolution is important to distinguish objects that are close to one another.
+
+Patient_Data directory contains the reconstructed images and projections (in DICOM-CT-PD format) of the CT scans.
+Ancillary_Information contains detailed documentation on the file format DICOM-CT-PD (vendor neutral DICOM format), and lesion information.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import mnist
@@ -14,6 +35,137 @@ We use data from 2016 Low Dose CT Grand Challenge (https://www.aapm.org/grandcha
 
 #+RESULTS:
 : 2024-03-06 20:33:52.902441: W external/xla/xla/service/gpu/nvptx_compiler.cc:742] The NVIDIA driver's CUDA version is 12.0 which is older than the ptxas CUDA version (12.4.99). Because the driver is older than the ptxas version, XLA is disabling parallel compilation, which may slow down compilation. You should update your NVIDIA driver or use the NVIDIA-provided CUDA forward compatibility packages.
+
+We examine some full dose samples from the training images.
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  from skimage.transform import iradon
+  from pydicom import dcmread
+  import matplotlib.pyplot as plt
+  import numpy as np
+  from pathlib import Path
+
+  path='/Users/huiyuanchua/Documents/Mayo_Grand_Challenge/Patient_Data'
+
+  ima_path=f'{path}/Training_Image_Data/3mm B30'
+  ima_fd_path=f'{ima_path}/full_3mm/L067/full_3mm'
+
+  pathlist = Path(ima_fd_path).rglob('*.IMA')
+  ima_files = [ima for ima in pathlist]
+
+  n = 3
+  images=[]
+  ima_batch = np.random.choice(ima_files, size=n**2, replace=False)
+  fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  for i, ima_file in enumerate(ima_batch):
+      ima = dcmread(ima_file)
+      image = ima.pixel_array
+      images.append(image)
+      ax = axs[i // n][i % n]
+      ax.imshow(image, cmap=plt.cm.Greys_r,)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/aabdeaeb165e16b9d793dc0d4d3ca86aff2102ce.png]]
+
+
+We apply forward projection on the batch to obtain their respective sinograms (Radon transform).
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from skimage.data import shepp_logan_phantom
+  from skimage.transform import radon, rescale
+
+  sinograms = []
+  fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  for i, image in enumerate(images):
+      ax = axs[i // n][i % n]
+
+      theta = np.linspace(0., 180., max(image.shape), endpoint=False)
+      sinogram = radon(image, theta=theta)
+      sinograms.append(sinogram)
+      dx, dy = 0.5 * 180.0 / max(image.shape), 0.5 / sinogram.shape[0]
+      ax.imshow(sinogram, cmap=plt.cm.Greys_r,
+                 extent=(-dx, 180.0 + dx, -dy, sinogram.shape[0] + dy),
+                 aspect='auto')
+
+      ax.imshow(sinogram)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: /Users/huiyuanchua/miniconda3/envs/venv310/lib/python3.10/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
+:   warn('Radon transform: image must be zero outside the '
+[[file:./.ob-jupyter/3fd5bcc9cee83a39323c844070de4642b369146f.png]]
+:END:
+
+We now apply filtered back projection to reconstruct the original image using the filter "ramp".
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  from skimage.transform import iradon
+  from pydicom import dcmread
+  import matplotlib.pyplot as plt
+
+  sinogram = sinograms[4]
+  image = images[4]
+  reconstruction_fbp = iradon(sinogram, theta=theta, filter_name='ramp')
+  error = reconstruction_fbp - images[i]
+  print(f'FBP rms reconstruction error: {np.sqrt(np.mean(error**2)):.3g}')
+
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  ax1.set_title("Ground Truth")
+  ax1.imshow(image, cmap=plt.cm.Greys_r)
+  ax2.set_title("FBP image")
+  ax2.imshow(reconstruction_fbp, cmap=plt.cm.Greys_r)
+  ax3.set_title("Reconstruction error\nFiltered back projection")
+  ax3.imshow(reconstruction_fbp - image, cmap=plt.cm.Greys_r, **imkwargs)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: FBP rms reconstruction error: 803
+[[file:./.ob-jupyter/460de547e81f0610926f5f39badaeedc759d04d5.png]]
+:END:
+
+Next, we explore if it's possible to reconstruct images from Mayo's full dose projections, and how it compares with the provided images.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  from pydicom import dcmread
+  import matplotlib.pyplot as plt
+  import numpy as np
+  from pathlib import Path
+
+  path='/Users/huiyuanchua/Documents/Mayo_Grand_Challenge/Patient_Data'
+
+  dcm_path=f'{path}/Training_Projection_Data/L067'
+  dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
+
+  pathlist = Path(dcm_fd_path).rglob('*.dcm')
+  dcm_files = [dcm_file for dcm_file in pathlist]
+
+  n = 3
+  sinograms=[]
+  sinogram_batch = np.random.choice(dcm_files, size=n**2, replace=False)
+  fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  for i, sinogram_file in enumerate(sinogram_batch):
+      dcm = dcmread(sinogram_file)
+      sinogram = dcm.pixel_array
+      sinograms.append(sinogram)
+      ax = axs[i // n][i % n]
+      ax.imshow(sinogram, cmap=plt.cm.Greys_r,)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/3ef80611a509e68af51208e81a3f5b56871997d5.png]]
 
 * DDPM
 DDPM specific parameters.
