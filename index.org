@@ -1,10 +1,25 @@
 #+TITLE: Examination of DDPM and CEM on Bayesian Inversion problems.
 #+setupfile: ~/.emacs.d/setupfile.org
 
+* Log
+** 2024-03-15 :meeting:
+- Professor Wang's server is downloading the Mayo training data.
+- For this problem, CEM has to be conditioned on three parameters (instead of two), namely:
+  1) Gaussian noise level $t$ (applied to ground truth $\bm{X}_0$)
+  2) forward diffused ground truth $\bm{X}_t$ at noise level $t$
+  3) low dose CT image
+- The low does CT image is a new parameter and conditions the neural network to denoise $\bm{X}_t$ to $\widetilde{\bm{X}_0}$ with similar probability distribution to $\bm{X}_0$ (identical to earlier DDPM/CEM experiments/exercise).
+- The number of training samples is too little, and we will need to create more samples akin to [cite:@adler2018_deep_bayesian_inversion]. @Huiyuan to reach out to authors on code to create new samples.
+- For this exercise, we can amend the earlier conditioned U-net to allow for two channels instead of one. Professor Wang has a sample pytorch code here https://github.com/wang-zhongjian/CFNO/blob/main/codes/unet.py.
+- Code for this problem is stored here https://github.com/ainuyew/bayesian-inversion.
+
+
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
 In a CT scan of a 3D subject, multiple 2D projections are generated for each angle of projection. Projections are created by the forward projection algorithm,and measures the attenutation (reduction in intensity) of the x-ray beam (cast no the subject towards the deector). A sinogram consist of mutiple projections stacked together. We can then reconstruct a 3D image of the subject of interest through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
+
+In [cite:@adler2018_deep_bayesian_inversion], we train two neural networks (GAN) to assist in the analysis of ultra low dose CT scans. An ultra low dose CT scan is simulated from a normal dose CT scan image. Projections are sampled from the normal dose image and Poisson noise is added to the projections. The ultra low dose CT image is then reconstructed using filtered back projection (FBP). The first neural network (deep posterior sampling) produces (high quality) sample images from the ultra low dose images. The second neural network (deep direct estimation) returns the mean and variance (of what the normal dose should be) given an ultra lose dose image.
 
 [cite:@moen2021_low-dose_ct_image] provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections.
 
@@ -17,31 +32,14 @@ Given knowledge of how a forward projection works, we can reverse the process (w
 3. De-blur projection, BP to image, then finally de-blur again
 The second option (called Filtered Back Projection or FBP) is the most common as it is fast and robust. Back projection is the process of mapping the data from the detector space to the image space, while forward projection is the process of mapping the data in the image space to the detector space.
 
-** References
-- http://xrayphysics.com/ctsim.html
-- https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
-- https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
-- https://github.com/Feanor007/Thin2Thick
-- https://pypi.org/project/algotom/
-- https://github.com/cabouman/OpenMBIR-Index/blob/master/README.md
-- https://humanhealth.iaea.org/HHW/MedicalPhysics/NuclearMedicine/ImageAnalysis/3Dimagereconstruction/index.html
-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/ Pyro-NN
-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4181643/ TomoPy
-- http://www.sci.utah.edu/~shireen/pdfs/tutorials/Elhabian_CT09.pdf
+
 * Data
 We use data from 2016 Low Dose CT Grand Challenge (https://www.aapm.org/grandchallenge/lowdosect/#testDatasets). Training data is downloaded from box at https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h. (https://www.imagewisely.org/Imaging-Modalities/Computed-Tomography/Image-Reconstruction-Techniques) The data contains images reconstructed using two reconstruction kernels B30 and D45. Reconstruction kernels (also called “filter” or “algorithm”) affects the image quality. There is a tradeoff between spatial resolution and noise. A smoother kernel generates images with lower noise but with reduced spatial resolution. A sharper kernel generates images with higher spatial resolution, but increases the image noise. Spatial resolution in CT is the ability to differentiate objects of different density. A high spatial resolution is important to distinguish objects that are close to one another.
 
 Patient_Data directory contains the reconstructed images and projections (in DICOM-CT-PD format) of the CT scans.
 Ancillary_Information contains detailed documentation on the file format DICOM-CT-PD (vendor neutral DICOM format), and lesion information.
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import mnist
 
-  normalized_images = mnist.get_training_data()
-#+end_src
-
-#+RESULTS:
-: 2024-03-06 20:33:52.902441: W external/xla/xla/service/gpu/nvptx_compiler.cc:742] The NVIDIA driver's CUDA version is 12.0 which is older than the ptxas CUDA version (12.4.99). Because the driver is older than the ptxas version, XLA is disabling parallel compilation, which may slow down compilation. You should update your NVIDIA driver or use the NVIDIA-provided CUDA forward compatibility packages.
+Full (normal) and associate quarter (low) dose projections (.DCM) and associated reconstructed images (.IMA) are provided by Mayo clinic. The low dose projections are simulated from the normal dose projections [cite:@mccollough2017_low-dose_ct_detection]. The training data contain data from ten patients while the testing data contain data from twenty patients. For each patient and dosage level, there are ~48k projection files and 225 reconstructed images. Each 225 reconstructed images are 2D images which forms a 3D view of the patient. Mayo has provided reconstructed images using two thickness (1mm and 3mm) and two kernels (B30 and D45). Hence, for every patient, we have a total of 2 x 2 x 2 x 225 = 1800 image files.
 
 We examine some full dose samples from the training images.
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -74,7 +72,7 @@ We examine some full dose samples from the training images.
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/aabdeaeb165e16b9d793dc0d4d3ca86aff2102ce.png]]
+[[file:./.ob-jupyter/02c449134c0f8da25e8477bf7d63a68818d480db.png]]
 
 
 We apply forward projection on the batch to obtain their respective sinograms (Radon transform).
@@ -107,7 +105,7 @@ We apply forward projection on the batch to obtain their respective sinograms (R
 :RESULTS:
 : /Users/huiyuanchua/miniconda3/envs/venv310/lib/python3.10/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
 :   warn('Radon transform: image must be zero outside the '
-[[file:./.ob-jupyter/3fd5bcc9cee83a39323c844070de4642b369146f.png]]
+[[file:./.ob-jupyter/ca23fbc2abe1e301745f7fca7b78276cebdc3789.png]]
 :END:
 
 We now apply filtered back projection to reconstruct the original image using the filter "ramp".
@@ -137,8 +135,8 @@ We now apply filtered back projection to reconstruct the original image using th
 
 #+RESULTS:
 :RESULTS:
-: FBP rms reconstruction error: 803
-[[file:./.ob-jupyter/460de547e81f0610926f5f39badaeedc759d04d5.png]]
+: FBP rms reconstruction error: 646
+[[file:./.ob-jupyter/4f489d264b4894c343ef9b893c5dcef90888ef35.png]]
 :END:
 
 Next, we explore if it's possible to reconstruct images from Mayo's full dose projections, and how it compares with the provided images.
@@ -391,3 +389,19 @@ We sample images from the trained CEM model.
 :
 [[file:./.ob-jupyter/0f3f0e54e530983abb7d269c4c35266ac2b88c7c.png]]
 :END:
+
+* Reads
+- http://xrayphysics.com/ctsim.html
+- https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
+- https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
+- https://github.com/Feanor007/Thin2Thick
+- https://pypi.org/project/algotom/
+- https://github.com/cabouman/OpenMBIR-Index/blob/master/README.md
+- https://humanhealth.iaea.org/HHW/MedicalPhysics/NuclearMedicine/ImageAnalysis/3Dimagereconstruction/index.html
+- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/ Pyro-NN
+- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4181643/ TomoPy
+- http://www.sci.utah.edu/~shireen/pdfs/tutorials/Elhabian_CT09.pdf
+- Astra https://github.com/astra-toolbox/astra-toolbox
+- ODL https://github.com/odlgroup/odl/tree/master/examples/tomo
+* References
+#+PRINT_BIBLIOGRAPHY:
