@@ -17,6 +17,7 @@
 - Found a paper and assodicated code to simulate low-dose samples at https://github.com/smuzd/LD-CT-simulation/tree/master ([cite:@zeng2015_simple_low-dose_x-ray]). The Matlab code is dependent on MIRT library (https://github.com/JeffFessler/mirt), which is not actively maintained (author has switched to Julia). The code fails to run on Octave.
 - Found another github repository (https://github.com/xinario/SAGAN; https://link.springer.com/article/10.1007/s10278-018-0056-0) working on the CT scans with similar motives (to denoise low dosage CT scans). Octave does not support all the Matlab functions (e.g. function ~fanbeam~ in the image package) required by this code.
 - Read a 2020 paper (https://dx.doi.org/10.1088/1361-6560/ab8953) on simulating low dose CT scans that provided a summary on advances thus far, and introduced their better models/methods.  This goes beyond earlier methods of simply introducing Poisson noise (for quantum noise) and Gaussian noise (for electronic noise). The reearch tests various models to account for negative effects such as beam hardening, and compares their models against actual low dose CT scans.
+- Alternatively (https://arxiv.org/abs/1708.06453), there is a 850/dose deceased piglets CT scan data set with
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -409,6 +410,6 @@ We sample images from the trained CEM model.
 - matlab code for 2nd winner from 2016 Mayo Grand Challenge https://github.com/jongcye/deeplearningLDCT/tree/master
 - Jupyter code to add white noise to CT scans. May have code to reconstruct images from Helical scans? https://github.com/ayaanzhaque/Noise2Quality
 - Alternative CT training data? https://www.kaggle.com/c/data-science-bowl-2017/overview
-- Alternative CT training data from piglets?
+- Alternative CT training data from piglets? https://link.springer.com/article/10.1007/s10278-018-0056-0
 * References
 #+PRINT_BIBLIOGRAPHY:
