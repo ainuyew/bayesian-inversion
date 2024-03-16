@@ -14,7 +14,9 @@
 - Code for this problem is stored here https://github.com/ainuyew/bayesian-inversion.
 
 ** 2024-03-16
-Found a paper and assodicated code to simulate low-dose samples at https://github.com/smuzd/LD-CT-simulation/tree/master ([cite:@zeng2015_simple_low-dose_x-ray]).
+- Found a paper and assodicated code to simulate low-dose samples at https://github.com/smuzd/LD-CT-simulation/tree/master ([cite:@zeng2015_simple_low-dose_x-ray]). The Matlab code is dependent on MIRT library (https://github.com/JeffFessler/mirt), which is not actively maintained (author has switched to Julia). The code fails to run on Octave.
+- Found another github repository (https://github.com/xinario/SAGAN; https://link.springer.com/article/10.1007/s10278-018-0056-0) working on the CT scans with similar motives (to denoise low dosage CT scans). Octave does not support all the Matlab functions (e.g. function ~fanbeam~ in the image package) required by this code.
+- Read a 2020 paper (https://dx.doi.org/10.1088/1361-6560/ab8953) on simulating low dose CT scans that provided a summary on advances thus far, and introduced their better models/methods.  This goes beyond earlier methods of simply introducing Poisson noise (for quantum noise) and Gaussian noise (for electronic noise). The reearch tests various models to account for negative effects such as beam hardening, and compares their models against actual low dose CT scans.
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -22,7 +24,7 @@ In a CT scan of a 3D subject, multiple 2D projections are generated for each ang
 
 In [cite:@adler2018_deep_bayesian_inversion], we train two neural networks (GAN) to assist in the analysis of ultra low dose CT scans. An ultra low dose CT scan is simulated from a normal dose CT scan image. Projections are sampled from the normal dose image and Poisson noise is added to the projections. The ultra low dose CT image is then reconstructed using filtered back projection (FBP). The first neural network (deep posterior sampling) produces (high quality) sample images from the ultra low dose images. The second neural network (deep direct estimation) returns the mean and variance (of what the normal dose should be) given an ultra lose dose image.
 
-[cite:@moen2021_low-dose_ct_image] provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections.
+[cite:@moen2021_low-dose_ct_image] provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections by adding Poisson noise.
 
 ** Filtered Back Projection (FBP)
 Found a site on filtered back projection https://howradiologyworks.com/filtered-backprojection-fbp-illustrated-guide-for-radiologic-technologists/#:~:text=Back%20projection%20is%20the%20process,Filtered%20Backprojection%20and%20Iterative%20Reconstruction. A traditional x-ray scan gives us a 2d image of a subject of interest from a view (usually in front of the patient for a chest scan). One 2d image does not provide us a very good understanding of the subject. A forward projection algorithm instead takes multiple 2d images of a the subject from multiple and different angles/views. The end results are _sinograms_. Each line/row in a sinogram corresponds to 2d image taken of the subject at particular view. A sinogram is so named because each point in the subject corresponds traces a sinusoid curve.
@@ -32,7 +34,6 @@ Given knowledge of how a forward projection works, we can reverse the process (w
 2. De-blur projection then BP to image
 3. De-blur projection, BP to image, then finally de-blur again
 The second option (called Filtered Back Projection or FBP) is the most common as it is fast and robust. Back projection is the process of mapping the data from the detector space to the image space, while forward projection is the process of mapping the data in the image space to the detector space.
-
 
 * Data
 We use data from 2016 Low Dose CT Grand Challenge (https://www.aapm.org/grandchallenge/lowdosect/#testDatasets). Training data is downloaded from box at https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h. (https://www.imagewisely.org/Imaging-Modalities/Computed-Tomography/Image-Reconstruction-Techniques) The data contains images reconstructed using two reconstruction kernels B30 and D45. Reconstruction kernels (also called “filter” or “algorithm”) affects the image quality. There is a tradeoff between spatial resolution and noise. A smoother kernel generates images with lower noise but with reduced spatial resolution. A sharper kernel generates images with higher spatial resolution, but increases the image noise. Spatial resolution in CT is the ability to differentiate objects of different density. A high spatial resolution is important to distinguish objects that are close to one another.
@@ -140,7 +141,7 @@ We now apply filtered back projection to reconstruct the original image using th
 [[file:./.ob-jupyter/4f489d264b4894c343ef9b893c5dcef90888ef35.png]]
 :END:
 
-Next, we explore if it's possible to reconstruct images from Mayo's full dose projections, and how it compares with the provided images.
+Next, we explore if we can reconstruct images from Mayo's full dose projections, and how it compares with the provided images reconstructed using commercial software (weighted FBP).
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   from pydicom import dcmread
@@ -406,5 +407,8 @@ We sample images from the trained CEM model.
 - Operator Discretization Library (ODL): used by authors of the paper and has example Python code to reconstruct image from Helical scans https://github.com/odlgroup/odl/tree/master/examples/tomo
 - matlab code for simple low-dose CT samples simulation https://github.com/smuzd/LD-CT-simulation/tree/master
 - matlab code for 2nd winner from 2016 Mayo Grand Challenge https://github.com/jongcye/deeplearningLDCT/tree/master
+- Jupyter code to add white noise to CT scans. May have code to reconstruct images from Helical scans? https://github.com/ayaanzhaque/Noise2Quality
+- Alternative CT training data? https://www.kaggle.com/c/data-science-bowl-2017/overview
+- Alternative CT training data from piglets?
 * References
 #+PRINT_BIBLIOGRAPHY:
