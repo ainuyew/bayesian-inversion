@@ -13,7 +13,8 @@
 - For this exercise, we can amend the earlier conditioned U-net to allow for two channels instead of one. Professor Wang has a sample pytorch code here https://github.com/wang-zhongjian/CFNO/blob/main/codes/unet.py.
 - Code for this problem is stored here https://github.com/ainuyew/bayesian-inversion.
 
-
+** 2024-03-16
+Found a paper and assodicated code to simulate low-dose samples at https://github.com/smuzd/LD-CT-simulation/tree/master ([cite:@zeng2015_simple_low-dose_x-ray]).
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -391,17 +392,19 @@ We sample images from the trained CEM model.
 :END:
 
 * Reads
-- http://xrayphysics.com/ctsim.html
-- https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
-- https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
-- https://github.com/Feanor007/Thin2Thick
-- https://pypi.org/project/algotom/
-- https://github.com/cabouman/OpenMBIR-Index/blob/master/README.md
-- https://humanhealth.iaea.org/HHW/MedicalPhysics/NuclearMedicine/ImageAnalysis/3Dimagereconstruction/index.html
-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/ Pyro-NN
-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4181643/ TomoPy
-- http://www.sci.utah.edu/~shireen/pdfs/tutorials/Elhabian_CT09.pdf
-- Astra https://github.com/astra-toolbox/astra-toolbox
-- ODL https://github.com/odlgroup/odl/tree/master/examples/tomo
+- Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html
+- Example to perform simple image reconstruction using scikit-image https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
+- Python code to reconstruct image from helical scans https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
+- Python code to simulate thick slice images from Helical scans https://github.com/Feanor007/Thin2Thick
+- Python library for Tomography https://pypi.org/project/algotom/
+- C code for Model-Based Iterative Reconstruciton code for Multi-Slice Helical Geometry https://github.com/cabouman/OpenMBIR-Index/blob/master/README.md
+- General summary for 3D image reconstruction https://humanhealth.iaea.org/HHW/MedicalPhysics/NuclearMedicine/ImageAnalysis/3Dimagereconstruction/index.html
+- Pyro-NN: Generalized Python code for image reconstruciton using deep learning implemented in Tensorflow code https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/
+- TomoPy: python library for tomographic data analysis https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4181643/
+- Powerpoint presentation on CT image reconstruction http://www.sci.utah.edu/~shireen/pdfs/tutorials/Elhabian_CT09.pdf
+- Astra toolbox: python matlab library for 2D/3D tomography https://github.com/astra-toolbox/astra-toolbox
+- Operator Discretization Library (ODL): used by authors of the paper and has example Python code to reconstruct image from Helical scans https://github.com/odlgroup/odl/tree/master/examples/tomo
+- matlab code for simple low-dose CT samples simulation https://github.com/smuzd/LD-CT-simulation/tree/master
+- matlab code for 2nd winner from 2016 Mayo Grand Challenge https://github.com/jongcye/deeplearningLDCT/tree/master
 * References
 #+PRINT_BIBLIOGRAPHY:
