@@ -7,7 +7,7 @@ import time
 
 import unet
 import utils
-import mnist
+import mayo
 
 @jit
 def forward_process(x_0, t, eta):
@@ -81,7 +81,7 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
           best_loss = epoch_loss
           utils.save_pytree(state.params, f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{best_loss:.5f}')
           n_stale_epoch = 1
-      else if n_stale_epoch < patience:
+      elif n_stale_epoch < patience:
           n_stale_epoch += 1
       else:
           print(f'stop training early after {epoch} epochs with a best loss of {best_loss} ')
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     CHECKPOINT_DIR=os.path.abspath('/tmp/cem')
     LOSS_LOG= f'{PROJECT_DIR}/cem_loss_log.npy'
     SEED=42
-    BATCH_SIZE=10
+    BATCH_SIZE=1000
     N_EPOCH=10
     T = 10.
     K = 200
@@ -114,7 +114,10 @@ if __name__ == '__main__':
         state = utils.create_training_state(key=key2)
         utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    training_data = mnist.get_training_data()[:1000]
+    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    training_data = mayo.get_training_data(path)
+    training_data = jnp.array([np.concatenate((fd.reshape(512, 512, 1), qd.reshape(512, 512, 1)), axis=2) for fd, qd in training_data])
+
     time_schedule = utils.exponential_time_schedule(T, K)[1:] # ignore 0.0
 
     start = time.time()

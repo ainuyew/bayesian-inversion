@@ -7,7 +7,7 @@ import time
 
 import unet
 import utils
-import mnist
+import mayo
 
 @jit
 def forward_process(x_0, a_bar_k, eta):
@@ -65,7 +65,7 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
           step = step+1
           loss_log.append((epoch, step, loss))
 
-      utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
+      #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
       utils.save_loss_log(loss_log, LOSS_LOG)
 
       epoch_loss = np.mean([loss for _, _, loss in loss_log])
@@ -74,7 +74,7 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
           best_loss = epoch_loss
           utils.save_pytree(state.params, f'{PROJECT_DIR}/ddpm_params_{epoch}_{step}_{best_loss:.5f}')
           n_stale_epoch=1
-      else if n_stale_epoch < patience:
+      elif n_stale_epoch < patience:
           n_stale_epoch += 1
       else:
           print(f'stop training early after {epoch} epochs with a best loss of {best_loss} ')
@@ -88,10 +88,10 @@ if __name__ == '__main__':
     LOSS_LOG= f'{PROJECT_DIR}/ddpm_loss_log.npy'
     SEED=42
     BATCH_SIZE=10
-    N_EPOCH=50
+    N_EPOCH=10
     MIN_BETA=1e-4
     MAX_BETA=.02
-    K = 1000
+    K = 200
     PATIENCE=5
 
     key = random.PRNGKey(SEED)
@@ -106,9 +106,11 @@ if __name__ == '__main__':
         print(f'restore checkpoint from epoch {epoch_start} and step {step}')
     else:
         state = utils.create_training_state(key=key2)
-        utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
+        #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    training_data = mnist.get_training_data()
+    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    training_data = mayo.get_training_data(path, 1089, 1289)
+    training_data = jnp.array([np.concatenate((fd.reshape(512, 512, 1), qd.reshape(512, 512, 1)), axis=2) for fd, qd in training_data])
 
     betas = jnp.linspace(MIN_BETA, MAX_BETA, K, dtype=jnp.float32) # noise variance
     alphas = 1- betas
@@ -116,7 +118,7 @@ if __name__ == '__main__':
     ks = jnp.array(range(len(betas))) # noise variance indexes
 
     start = time.time()
-    state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, patience, step=step+1, epoch_start=epoch_start+1)
+    state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
     end = time.time()
 
     print(f'elapsed: {end - start}s')

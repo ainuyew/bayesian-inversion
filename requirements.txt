@@ -1,9 +1,15 @@
-numpy
+numpy==1.19.5
 flax
 pandas
 seaborn
 matplotlib
 tqdm
 scikit-learn
+scikit-image
 tqdm
 einops
+pydicom
+future==1.0.0
+odl==0.7.0
+packaging==24.0
+scipy==1.10.1

@@ -17,11 +17,32 @@
 - Found a paper and assodicated code to simulate low-dose samples at https://github.com/smuzd/LD-CT-simulation/tree/master ([cite:@zeng2015_simple_low-dose_x-ray]). The Matlab code is dependent on MIRT library (https://github.com/JeffFessler/mirt), which is not actively maintained (author has switched to Julia). The code fails to run on Octave.
 - Found another github repository (https://github.com/xinario/SAGAN; https://link.springer.com/article/10.1007/s10278-018-0056-0) working on the CT scans with similar motives (to denoise low dosage CT scans). Octave does not support all the Matlab functions (e.g. function ~fanbeam~ in the image package) required by this code.
 - Read a 2020 paper (https://dx.doi.org/10.1088/1361-6560/ab8953) on simulating low dose CT scans that provided a summary on advances thus far, and introduced their better models/methods.  This goes beyond earlier methods of simply introducing Poisson noise (for quantum noise) and Gaussian noise (for electronic noise). The reearch tests various models to account for negative effects such as beam hardening, and compares their models against actual low dose CT scans.
-- Alternatively (https://arxiv.org/abs/1708.06453), there is a 850/dose deceased piglets CT scan data set with
+- Alternatively ([cite:@yi2018_sharpness-aware_low_dose], https://arxiv.org/abs/1708.06453), there is a 850/dose deceased piglets CT scan data set with
+
+** 2024-03-17
+- https://github.com/odlgroup/odl/issues/1569 add Poisson noise to projection data
+- https://github.com/odlgroup/odl/tree/25ec783954a85c2294ad5b76414f8c7c3cd2785d/odl/contrib/datasets/ct code for mayo reconstruction by authors
+** 2024-03-18
+- Tried unsuccessfully to install python 3.8 to work with ODL (last released in 2018). ODL will only work with numpy < 1.20. The author has contributed the Mayo data code to ODL. Downloaded source code of ODL with the intent to correct/update the code to work with 3.10 and associated dependencies.
+- DICOM public header tag "HUCalibrationFactor" is missing in the current DICOM-CT-PD files and have the same description as a private header tag "WaterAttenuationCoefficient" (see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4644156/). This is neccessary to calibrate the projections to water (HU=0).
+- Unable to run sample ODL code on M1. 3D geometry ray transformation requires CUDA. Sample code show how to create training data.
+- There's matlab code  (https://github.com/xinario/SAGAN/blob/master/poisson_noise_simulation/add_poisson_noise.m) that details how it's done in reference to the paper ([cite:@yi2018_sharpness-aware_low_dose]). The code adds noise to an image. The sinograms are created prior to adding of noise. A reconstructed image is returned by the function.
+
+#+DOWNLOADED: screenshot @ 2024-03-18 19:25:45
+[[file:20240318-192545_screenshot.png]]
+
+- [cite:@yi2018_sharpness-aware_low_dose] uses images from few subjects (36 subjects). Hence, there's little independence between the images.
+** 2024-03-19
+- National Lung Screening Trial (NLST) at https://wiki.cancerimagingarchive.net/display/NLST has 11.TB of CT scans/images for 26,254 subjects.
+- https://huggingface.co/docs/diffusers/v0.25.0/en/api/models/unet2d-cond has a conditional U-Net that ".. takes a noisy sample, conditional state, and a timestep and returns a sample shaped output.".
+- Jax conditional Unet should be able to embed multiple channels in the data i.e. it has a shape of (n_batch, rows, columns, n_channel) = (1000, 512, 512, 2).
+
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
-In a CT scan of a 3D subject, multiple 2D projections are generated for each angle of projection. Projections are created by the forward projection algorithm,and measures the attenutation (reduction in intensity) of the x-ray beam (cast no the subject towards the deector). A sinogram consist of mutiple projections stacked together. We can then reconstruct a 3D image of the subject of interest through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
+In a CT scan of a subjectsbegy2pts, multiple 2D projections are generated for each angle of projection. Projections are created by the forward projection algorithm,and measures the attenutation (reduction in intensity) of the x-ray beam (cast no the subject towards the deector). A sinogram consist of mutiple projections stacked together. We can then reconstruct a 3D image of the subject of interest through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
+
+
 
 In [cite:@adler2018_deep_bayesian_inversion], we train two neural networks (GAN) to assist in the analysis of ultra low dose CT scans. An ultra low dose CT scan is simulated from a normal dose CT scan image. Projections are sampled from the normal dose image and Poisson noise is added to the projections. The ultra low dose CT image is then reconstructed using filtered back projection (FBP). The first neural network (deep posterior sampling) produces (high quality) sample images from the ultra low dose images. The second neural network (deep direct estimation) returns the mean and variance (of what the normal dose should be) given an ultra lose dose image.
 
@@ -44,6 +65,8 @@ Ancillary_Information contains detailed documentation on the file format DICOM-C
 
 Full (normal) and associate quarter (low) dose projections (.DCM) and associated reconstructed images (.IMA) are provided by Mayo clinic. The low dose projections are simulated from the normal dose projections [cite:@mccollough2017_low-dose_ct_detection]. The training data contain data from ten patients while the testing data contain data from twenty patients. For each patient and dosage level, there are ~48k projection files and 225 reconstructed images. Each 225 reconstructed images are 2D images which forms a 3D view of the patient. Mayo has provided reconstructed images using two thickness (1mm and 3mm) and two kernels (B30 and D45). Hence, for every patient, we have a total of 2 x 2 x 2 x 225 = 1800 image files.
 
+In the Helical scan, pitch refers to the movement of the table in the z-axis relative to the height of the detector. A helical pitch of 1.0 means the table will move a distance equal to the height of the detector resulting in scans which do not overlap and do not have gaps. A helical pitch of 0.5 means the table will move a distance equal to half the height of the detector resulting in scans that overlap. This is usually done to improve spatial resolution.
+
 We examine some full dose samples from the training images.
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   from skimage.transform import iradon
@@ -51,8 +74,11 @@ We examine some full dose samples from the training images.
   import matplotlib.pyplot as plt
   import numpy as np
   from pathlib import Path
+  import tqdm
 
-  path='/Users/huiyuanchua/Documents/Mayo_Grand_Challenge/Patient_Data'
+  import utils
+
+  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'
 
   ima_path=f'{path}/Training_Image_Data/3mm B30'
   ima_fd_path=f'{ima_path}/full_3mm/L067/full_3mm'
@@ -65,17 +91,26 @@ We examine some full dose samples from the training images.
   ima_batch = np.random.choice(ima_files, size=n**2, replace=False)
   fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
   _ = fig.tight_layout()
-  for i, ima_file in enumerate(ima_batch):
+  for i, ima_file in tqdm.tqdm(enumerate(ima_batch)):
       ima = dcmread(ima_file)
       image = ima.pixel_array
-      images.append(image)
+
+      # convert to HU
+      hu_values = ima.RescaleSlope * image + ima.RescaleIntercept
+      densities = (hu_values + 1000)/1000
+      images.append(densities)
       ax = axs[i // n][i % n]
-      ax.imshow(image, cmap=plt.cm.Greys_r,)
+      #ax.imshow(image, cmap=plt.cm.Greys_r,)
+      ax.imshow(utils.normalize_image(densities), cmap=plt.cm.Greys_r,)
   plt.show()
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/02c449134c0f8da25e8477bf7d63a68818d480db.png]]
+:RESULTS:
+: 9it [00:00, 282.17it/s]
+:
+[[file:./.ob-jupyter/d106bffcb7948cba61b5dba49266665e75137c41.png]]
+:END:
 
 
 We apply forward projection on the batch to obtain their respective sinograms (Radon transform).
@@ -85,11 +120,12 @@ We apply forward projection on the batch to obtain their respective sinograms (R
   import matplotlib.pyplot as plt
   from skimage.data import shepp_logan_phantom
   from skimage.transform import radon, rescale
+  import tqdm
 
   sinograms = []
   fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
   _ = fig.tight_layout()
-  for i, image in enumerate(images):
+  for i, image in tqdm.tqdm(enumerate(images)):
       ax = axs[i // n][i % n]
 
       theta = np.linspace(0., 180., max(image.shape), endpoint=False)
@@ -106,9 +142,11 @@ We apply forward projection on the batch to obtain their respective sinograms (R
 
 #+RESULTS:
 :RESULTS:
-: /Users/huiyuanchua/miniconda3/envs/venv310/lib/python3.10/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
+: 0it [00:00, ?it/s]/Users/huiyuanchua/miniconda3/envs/venv310/lib/python3.10/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
 :   warn('Radon transform: image must be zero outside the '
-[[file:./.ob-jupyter/ca23fbc2abe1e301745f7fca7b78276cebdc3789.png]]
+: 9it [00:06,  1.42it/s]
+:
+[[file:./.ob-jupyter/9908590d1629c61ffc91bfa8d539c672a7a6b737.png]]
 :END:
 
 We now apply filtered back projection to reconstruct the original image using the filter "ramp".
@@ -118,62 +156,192 @@ We now apply filtered back projection to reconstruct the original image using th
   from pydicom import dcmread
   import matplotlib.pyplot as plt
 
+  import utils
+
   sinogram = sinograms[4]
   image = images[4]
   reconstruction_fbp = iradon(sinogram, theta=theta, filter_name='ramp')
-  error = reconstruction_fbp - images[i]
+  error = reconstruction_fbp - image
   print(f'FBP rms reconstruction error: {np.sqrt(np.mean(error**2)):.3g}')
 
   imkwargs = dict(vmin=-0.2, vmax=0.2)
   fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
   _ = fig.tight_layout()
   ax1.set_title("Ground Truth")
-  ax1.imshow(image, cmap=plt.cm.Greys_r)
+  ax1.imshow(utils.normalize_image(image), cmap=plt.cm.Greys_r)
   ax2.set_title("FBP image")
-  ax2.imshow(reconstruction_fbp, cmap=plt.cm.Greys_r)
+  ax2.imshow(utils.normalize_image(reconstruction_fbp), cmap=plt.cm.Greys_r)
   ax3.set_title("Reconstruction error\nFiltered back projection")
-  ax3.imshow(reconstruction_fbp - image, cmap=plt.cm.Greys_r, **imkwargs)
+  ax3.imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
   plt.show()
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-: FBP rms reconstruction error: 646
-[[file:./.ob-jupyter/4f489d264b4894c343ef9b893c5dcef90888ef35.png]]
+: FBP rms reconstruction error: 0.105
+[[file:./.ob-jupyter/aae84632d2a803a7aac0bf7c4eb669df0b4008ec.png]]
 :END:
 
-Next, we explore if we can reconstruct images from Mayo's full dose projections, and how it compares with the provided images reconstructed using commercial software (weighted FBP).
+Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and compare a few samples.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  from pydicom import dcmread
-  import matplotlib.pyplot as plt
+  import mayo
   import numpy as np
-  from pathlib import Path
+  import matplotlib.pyplot as plt
 
-  path='/Users/huiyuanchua/Documents/Mayo_Grand_Challenge/Patient_Data'
+  import utils
+
+  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path, 1089, 1289)
+  fd_ima, qd_ima = training_data[len(training_data) // 2]
+  noise = fd_ima - qd_ima
+
+  print(f'noise: {np.sqrt(np.mean(noise**2)):.3g}')
+
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = ax1.set_title("full dose image")
+  _ = ax1.imshow(utils.normalize_image(fd_ima), cmap=plt.cm.Greys_r)
+  _ = ax2.set_title("quarter dose image")
+  _ = ax2.imshow(utils.normalize_image(qd_ima), cmap=plt.cm.Greys_r)
+  _ = ax3.set_title("noise")
+  _ = ax3.imshow(noise, cmap=plt.cm.Greys_r, **imkwargs)
+  plt.show()
+
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/full_3mm: 100% 200/200 [00:00<00:00, 927.07it/s]
+:
+: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/quarter_3mm: 100% 200/200 [00:00<00:00, 997.71it/s]
+:
+: noise: 0.0182
+[[file:./.ob-jupyter/4f73051cb4e57d44caff601d7dfd131deed886f5.png]]
+:END:
+
+Next, we explore if we can reconstruct images from Mayo's full dose projections (Helical scans), and how it compares with the provided images reconstructed using commercial software (weighted FBP).
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  #from pydicom import dcmread
+  #import matplotlib.pyplot as plt
+  #import numpy as np
+  #from pathlib import Path
+
+  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'
 
   dcm_path=f'{path}/Training_Projection_Data/L067'
   dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
 
-  pathlist = Path(dcm_fd_path).rglob('*.dcm')
-  dcm_files = [dcm_file for dcm_file in pathlist]
+  import odl
+  from odl.contrib.datasets.ct import mayo
 
-  n = 3
-  sinograms=[]
-  sinogram_batch = np.random.choice(dcm_files, size=n**2, replace=False)
-  fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
-  _ = fig.tight_layout()
-  for i, sinogram_file in enumerate(sinogram_batch):
-      dcm = dcmread(sinogram_file)
-      sinogram = dcm.pixel_array
-      sinograms.append(sinogram)
-      ax = axs[i // n][i % n]
-      ax.imshow(sinogram, cmap=plt.cm.Greys_r,)
-  plt.show()
+  mayo_dir = '/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
+
+  # Load reference reconstruction
+  #volume_folder = mayo_dir + '/Training Cases/L067/full_1mm_sharp'
+  volume_folder = mayo_dir + '/Training_Image_Data/3mm B30/full_3mm/L067/full_3mm'
+  partition, volume = mayo.load_reconstruction(volume_folder)
+
+  # Load a subset of the projection data
+  #data_folder = mayo_dir + '/Training Cases/L067/full_DICOM-CT-PD'
+  data_folder = mayo_dir + '/Training_Projection_Data/L067/DICOM-CT-PD_FD'
+  geometry, proj_data = mayo.load_projections(data_folder,
+                                            indices=slice(20000, 28000))
+
+  # Reconstruction space and ray transform
+  space = odl.uniform_discr_frompartition(partition, dtype='float32')
+  ray_trafo = odl.tomo.RayTransform(space, geometry)
+
+  # Define FBP operator
+  fbp = odl.tomo.fbp_op(ray_trafo, padding=True)
+
+  # Tam-Danielsson window to handle redundant data
+  td_window = odl.tomo.tam_danielson_window(ray_trafo, n_pi=3)
+
+  # Calculate FBP reconstruction
+  fbp_result = fbp(td_window * proj_data)
+
+  # Compare the computed recon to reference reconstruction (coronal slice)
+  ref = space.element(volume)
+  fbp_result.show('Recon (coronal)', clim=[0.7, 1.3])
+  ref.show('Reference (coronal)', clim=[0.7, 1.3])
+  (ref - fbp_result).show('Diff (coronal)', clim=[-0.1, 0.1])
+
+  # Also visualize sagittal slice (note that we only used a subset)
+  coords = [0, None, None]
+  fbp_result.show('Recon (sagittal)', clim=[0.7, 1.3], coords=coords)
+  ref.show('Reference (sagittal)', clim=[0.7, 1.3], coords=coords)
+  (ref - fbp_result).show('Diff (sagittal)', clim=[-0.1, 0.1], coords=coords)
+
+  #n = 3
+  #sinograms=[]
+  #sinogram_batch = np.random.choice(dcm_files, size=n**2, replace=False)
+  #fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  #_ = fig.tight_layout()
+  #for i, sinogram_file in enumerate(sinogram_batch):
+  #    dcm = dcmread(sinogram_file)
+  #    sinogram = dcm.pixel_array
+  #    sinograms.append(sinogram)
+  #    ax = axs[i // n][i % n]
+  #    ax.imshow(sinogram, cmap=plt.cm.Greys_r,)
+  #plt.show()
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/3ef80611a509e68af51208e81a3f5b56871997d5.png]]
+:RESULTS:
+: loading volume data: 100% 223/223 [00:00<00:00, 669.45it/s]
+:
+: Loading projection data: 100% 8000/8000 [00:04<00:00, 1659.23it/s]
+:
+: 3
+# [goto error]
+#+begin_example
+[0;31m---------------------------------------------------------------------------[0m
+[0;31mValueError[0m                                Traceback (most recent call last)
+Cell [0;32mIn[1], line 24[0m
+[1;32m     21[0m [38;5;66;03m# Load a subset of the projection data[39;00m
+[1;32m     22[0m [38;5;66;03m#data_folder = mayo_dir + '/Training Cases/L067/full_DICOM-CT-PD'[39;00m
+[1;32m     23[0m data_folder [38;5;241m=[39m mayo_dir [38;5;241m+[39m [38;5;124m'[39m[38;5;124m/Training_Projection_Data/L067/DICOM-CT-PD_FD[39m[38;5;124m'[39m
+[0;32m---> 24[0m geometry, proj_data [38;5;241m=[39m [43mmayo[49m[38;5;241;43m.[39;49m[43mload_projections[49m[43m([49m[43mdata_folder[49m[43m,[49m
+[1;32m     25[0m [43m                                          [49m[43mindices[49m[38;5;241;43m=[39;49m[38;5;28;43mslice[39;49m[43m([49m[38;5;241;43m20000[39;49m[43m,[49m[43m [49m[38;5;241;43m28000[39;49m[43m)[49m[43m)[49m
+[1;32m     27[0m [38;5;66;03m# Reconstruction space and ray transform[39;00m
+[1;32m     28[0m space [38;5;241m=[39m odl[38;5;241m.[39muniform_discr_frompartition(partition, dtype[38;5;241m=[39m[38;5;124m'[39m[38;5;124mfloat32[39m[38;5;124m'[39m)
+
+File [0;32m~/Documents/bayesian-inversion/odl/contrib/datasets/ct/mayo.py:183[0m, in [0;36mload_projections[0;34m(folder, indices)[0m
+[1;32m    181[0m [38;5;66;03m# Create a *temporary* ray transform (we need its range)[39;00m
+[1;32m    182[0m spc [38;5;241m=[39m odl[38;5;241m.[39muniform_discr([[38;5;241m-[39m[38;5;241m1[39m] [38;5;241m*[39m [38;5;241m3[39m, [[38;5;241m1[39m] [38;5;241m*[39m [38;5;241m3[39m, [[38;5;241m32[39m] [38;5;241m*[39m [38;5;241m3[39m)
+[0;32m--> 183[0m ray_trafo [38;5;241m=[39m [43modl[49m[38;5;241;43m.[39;49m[43mtomo[49m[38;5;241;43m.[39;49m[43mRayTransform[49m[43m([49m[43mspc[49m[43m,[49m[43m [49m[43mgeometry[49m[43m,[49m[43m [49m[43minterp[49m[38;5;241;43m=[39;49m[38;5;124;43m'[39;49m[38;5;124;43mlinear[39;49m[38;5;124;43m'[39;49m[43m)[49m
+[1;32m    185[0m [38;5;66;03m# convert coordinates[39;00m
+[1;32m    186[0m theta, up, vp [38;5;241m=[39m ray_trafo[38;5;241m.[39mrange[38;5;241m.[39mgrid[38;5;241m.[39mmeshgrid
+
+File [0;32m~/Documents/bayesian-inversion/odl/tomo/operators/ray_trafo.py:381[0m, in [0;36mRayTransform.__init__[0;34m(self, domain, geometry, **kwargs)[0m
+[1;32m    337[0m [38;5;250m[39m[38;5;124;03m"""Initialize a new instance.[39;00m
+[1;32m    338[0m
+[1;32m    339[0m [38;5;124;03mParameters[39;00m
+[0;32m   (...)[0m
+[1;32m    378[0m [38;5;124;03mand storage order 'C'. Otherwise copies will be needed.[39;00m
+[1;32m    379[0m [38;5;124;03m"""[39;00m
+[1;32m    380[0m [38;5;28mrange[39m [38;5;241m=[39m kwargs[38;5;241m.[39mpop([38;5;124m'[39m[38;5;124mrange[39m[38;5;124m'[39m, [38;5;28;01mNone[39;00m)
+[0;32m--> 381[0m [38;5;28;43msuper[39;49m[43m([49m[43mRayTransform[49m[43m,[49m[43m [49m[38;5;28;43mself[39;49m[43m)[49m[38;5;241;43m.[39;49m[38;5;21;43m__init__[39;49m[43m([49m
+[1;32m    382[0m [43m    [49m[43mreco_space[49m[38;5;241;43m=[39;49m[43mdomain[49m[43m,[49m[43m [49m[43mproj_space[49m[38;5;241;43m=[39;49m[38;5;28;43mrange[39;49m[43m,[49m[43m [49m[43mgeometry[49m[38;5;241;43m=[39;49m[43mgeometry[49m[43m,[49m
+[1;32m    383[0m [43m    [49m[43mvariant[49m[38;5;241;43m=[39;49m[38;5;124;43m'[39;49m[38;5;124;43mforward[39;49m[38;5;124;43m'[39;49m[43m,[49m[43m [49m[38;5;241;43m*[39;49m[38;5;241;43m*[39;49m[43mkwargs[49m[43m)[49m
+
+File [0;32m~/Documents/bayesian-inversion/odl/tomo/operators/ray_trafo.py:160[0m, in [0;36mRayTransformBase.__init__[0;34m(self, reco_space, geometry, variant, **kwargs)[0m
+[1;32m    158[0m [38;5;28;01mif[39;00m impl[38;5;241m.[39mstartswith([38;5;124m'[39m[38;5;124mastra[39m[38;5;124m'[39m):
+[1;32m    159[0m     [38;5;28;01mif[39;00m geometry[38;5;241m.[39mndim [38;5;241m>[39m [38;5;241m2[39m [38;5;129;01mand[39;00m impl[38;5;241m.[39mendswith([38;5;124m'[39m[38;5;124mcpu[39m[38;5;124m'[39m):
+[0;32m--> 160[0m         [38;5;28;01mraise[39;00m [38;5;167;01mValueError[39;00m([38;5;124m'[39m[38;5;124m`impl` [39m[38;5;132;01m{!r}[39;00m[38;5;124m only works for 2d[39m[38;5;124m'[39m
+[1;32m    161[0m                          [38;5;124m'[39m[38;5;124m'[39m[38;5;241m.[39mformat(impl))
+[1;32m    163[0m     [38;5;66;03m# Print a warning if the detector midpoint normal vector at any[39;00m
+[1;32m    164[0m     [38;5;66;03m# angle is perpendicular to the geometry axis in parallel 3d[39;00m
+[1;32m    165[0m     [38;5;66;03m# single-axis geometry -- this is broken in some ASTRA versions[39;00m
+[1;32m    166[0m     [38;5;28;01mif[39;00m ([38;5;28misinstance[39m(geometry, Parallel3dAxisGeometry) [38;5;129;01mand[39;00m
+[1;32m    167[0m             [38;5;129;01mnot[39;00m astra_supports([38;5;124m'[39m[38;5;124mpar3d_det_mid_pt_perp_to_axis[39m[38;5;124m'[39m)):
+
+[0;31mValueError[0m: `impl` 'astra_cpu' only works for 2d
+#+end_example
+:END:
 
 * DDPM
 DDPM specific parameters.
@@ -396,12 +564,12 @@ We sample images from the trained CEM model.
 * Reads
 - Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html
 - Example to perform simple image reconstruction using scikit-image https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
-- Python code to reconstruct image from helical scans https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
+- Python code to reconstruct image from helical scans? https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
 - Python code to simulate thick slice images from Helical scans https://github.com/Feanor007/Thin2Thick
 - Python library for Tomography https://pypi.org/project/algotom/
 - C code for Model-Based Iterative Reconstruciton code for Multi-Slice Helical Geometry https://github.com/cabouman/OpenMBIR-Index/blob/master/README.md
 - General summary for 3D image reconstruction https://humanhealth.iaea.org/HHW/MedicalPhysics/NuclearMedicine/ImageAnalysis/3Dimagereconstruction/index.html
-- Pyro-NN: Generalized Python code for image reconstruciton using deep learning implemented in Tensorflow code https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/
+- Pyro-NN: Generalized Python code for image reconstruction using deep learning implemented in Tensorflow code https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/
 - TomoPy: python library for tomographic data analysis https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4181643/
 - Powerpoint presentation on CT image reconstruction http://www.sci.utah.edu/~shireen/pdfs/tutorials/Elhabian_CT09.pdf
 - Astra toolbox: python matlab library for 2D/3D tomography https://github.com/astra-toolbox/astra-toolbox

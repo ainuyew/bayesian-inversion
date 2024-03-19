@@ -1,9 +1,9 @@
-from pydicom import dcmread
-from pydicom.data import get_testdata_file
+import pydicom
 import numpy as np
-from pathlib import Path
 import os
 import zipfile
+import tqdm
+from pathlib import Path
 from io import BytesIO, TextIOWrapper
 
 def unzip(zip_path):
@@ -20,23 +20,33 @@ def unzip(zip_path):
             files.append((name, dcm))
     return files
 
-def get_training_data(folder):
-    fd_ima = []
-    qd_ima = []
+def get_training_data(folder, slice_start=0, slice_end=-1):
+    fd_imas = []
+    qd_imas = []
     fd_path=f'{folder}/full_3mm'
     qd_path=f'{folder}/quarter_3mm'
-    pathlist = Path(folder).rglob('*.ima')
-    for zip_path in pathlist:
-        zip_file_name = os.path.basename(zip_path)
-        dcm_files = unzip(zip_path)
-        for file_name, dcm in dcm_files:
-            ds.append((zip_file_name, file_name, dcm))
-    return ds
+
+    for search_path, imas in [(fd_path, fd_imas), (qd_path, qd_imas)]:
+        file_paths = sorted(list(Path(search_path).rglob('*.IMA')))[slice_start:slice_end]
+        for ima_file_path in tqdm.tqdm(file_paths, f'loading IMA files from {search_path}'):
+            ima = pydicom.read_file(ima_file_path)
+            rows = ima.Rows
+            cols = ima.Columns
+
+            pixel_array = ima.pixel_array
+
+            # convert to HU
+            hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
+            densities = (hu_values + 1000)/1000
+
+            imas.append(densities)
+
+    return list(zip(fd_imas, qd_imas))
 
 
 def main():
     #path='/Volumes/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
-    path='/Users/huiyuanchua/Documents/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
     #path='/media/huiyuanchua/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
     training_data = get_training_data(path)
     print(len(training_data))

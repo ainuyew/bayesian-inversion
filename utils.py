@@ -87,7 +87,7 @@ def create_training_state(params_file=None, key=None):
    # optimizer = optax.adam(learning_rate=1e-4, b1=.9, b2=.99, eps=1e-8)
     optimizer = optax.adam(learning_rate=2e-5)
 
-    params = neural_network.init(subkey, jnp.ones([1, 28, 28, 1]), jnp.ones((1,)))
+    params = neural_network.init(subkey, jnp.ones([1, 512, 512, 2]), jnp.ones((1,)))
     if params_file:
         params = load_pytree(params, params_file)
 
@@ -165,9 +165,27 @@ def normalize_to_zero_to_one(x):
 def normalize_to_neg_one_to_one(x):
     return normalize_to_zero_to_one(x) * 2 - 1
 
+def normalize_image(x):
+    return (normalize_to_zero_to_one(x) * 255).astype("uint8")
+
 def unnormalize_image(xs):
     assert len(xs.shape) == 4
     ys = []
     for x in xs:
       ys.append(normalize_to_zero_to_one(x) * 255)
     return ys
+
+def signal_to_noise_ratio(x, axis=0, ddof=0):
+    x = np.asanyarray(x)
+    m = x.mean(axis)
+    sd = x.std(axis=axis, ddof=ddof)
+    return np.where(sd == 0, 0, m/sd)
+
+def peak_signal_to_noise_ratio(x, y):
+    x = np.asanyarray(x)
+    y = np.asanyarray(y)
+    mse = np.mean(np.square(np.subtract(x, y)))
+    if mse == 0:
+        return np.Inf
+    PIXEL_MAX = 255.0
+    return 20 * math.log10(PIXEL_MAX) - 10 * math.log10(mse)
