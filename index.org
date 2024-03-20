@@ -36,6 +36,10 @@
 - National Lung Screening Trial (NLST) at https://wiki.cancerimagingarchive.net/display/NLST has 11.TB of CT scans/images for 26,254 subjects.
 - https://huggingface.co/docs/diffusers/v0.25.0/en/api/models/unet2d-cond has a conditional U-Net that ".. takes a noisy sample, conditional state, and a timestep and returns a sample shaped output.".
 - Jax conditional Unet should be able to embed multiple channels in the data i.e. it has a shape of (n_batch, rows, columns, n_channel) = (1000, 512, 512, 2).
+- Worked on code to train DDPM.
+** 2024-03-20
+- Training code is crashing with high memory consumption. Reducing number of images did not help. Will need to scale image down to see if that helps.
+- It might be worthwhile to try to run this on another library from jax in case that is the problem. There are plenty of Unet implementations on CT scans e.g. https://medium.com/@fabio.sancinetti/u-net-convnet-for-ct-scan-segmentation-6cc0d465eed3. Unet was afterall created for modeling image segmentation problems for medical applications [cite:@ronneberger2015_u-net_convolutional_networks].
 
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
@@ -213,9 +217,9 @@ Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and com
 
 #+RESULTS:
 :RESULTS:
-: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/full_3mm: 100% 200/200 [00:00<00:00, 927.07it/s]
+: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/full_3mm: 100% 200/200 [00:00<00:00, 637.58it/s]
 :
-: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/quarter_3mm: 100% 200/200 [00:00<00:00, 997.71it/s]
+: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/quarter_3mm: 100% 200/200 [00:00<00:00, 656.68it/s]
 :
 : noise: 0.0182
 [[file:./.ob-jupyter/4f73051cb4e57d44caff601d7dfd131deed886f5.png]]
@@ -360,6 +364,41 @@ DDPM specific parameters.
 #+RESULTS:
 
 ** Training
+First, let's make sure we have the correct shapes for training data inputs and predictions.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+    from jax import random
+    import jax.numpy as jnp
+    import numpy as np
+
+    import utils
+    import mayo
+
+    key = random.PRNGKey(42)
+    state = utils.create_training_state(key=key)
+    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    training_data = mayo.get_training_data(path, 1184, 1194)
+
+    x_0_fd = training_data[:, 0]
+    x_0_ld = training_data[:, 1]
+    x_k = jnp.concatenate((x_0_fd, x_0_ld), axis=-1)
+    n = training_data.shape[0]
+    k = random.choice(key, np.arange(200), shape=(n,))
+    predictions = state.apply_fn(state.params, x_k, k)
+    print(f'training input shape (x_t, t): {x_k.shape}', {k.shape})
+    print(f'predictions shape (x_0): {predictions.shape}')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/full_3mm: 100% 10/10 [00:00<00:00, 216.34it/s]
+:
+: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/quarter_3mm: 100% 10/10 [00:00<00:00, 220.53it/s]
+:
+: training input shape (x_t, t): (10, 128, 128, 2) {(10,)}
+: predictions shape (x_0): (10, 128, 128, 1)
+:END:
+
 Training is performed via a python script [[file:train_ddpm.py]]. We examine the average epoch loss with the following code:
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export

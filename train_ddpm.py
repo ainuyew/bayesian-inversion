@@ -21,7 +21,6 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
     @jit
     def mse_loss(params, inputs, k, targets) -> jnp.float32:
         assert inputs.shape[0] == k.shape[0]
-        assert inputs.shape == targets.shape
 
         n = targets.shape[0]
         predictions = state.apply_fn(params, inputs, k)
@@ -50,13 +49,16 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
           # regenerate a new random keys
           key, key2, key3 = random.split(key, 3)
 
-          n = x_0_batch.shape[0]
+          x_0_fd = x_0_batch[:, 0]
+          x_0_ld = x_0_batch[:, 1]
 
+          n = x_0_batch.shape[0]
           k = random.choice(key2, ks, shape=(n,))
           alpha_bar_k = alpha_bars[k, None, None, None] # (n, ) -> (n, 1, 1, 1)
-          eta = random.normal(key3, shape=x_0_batch.shape) # (n, 28, 28, 1)
+          eta = random.normal(key3, shape=x_0_fd.shape) # (n, 28, 28, 1)
 
-          x_k = forward_process(x_0_batch, alpha_bar_k, eta)
+          x_k_fd = forward_process(x_0_fd, alpha_bar_k, eta)
+          x_k = jnp.concatenate((x_k_fd, x_0_ld), axis=-1)
 
           loss, grads = value_and_grad(mse_loss)(state.params, x_k, k, eta)
 
@@ -64,6 +66,16 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
 
           step = step+1
           loss_log.append((epoch, step, loss))
+
+          del k
+          del alpha_bar_k
+          del eta
+          del x_k_fd
+          del x_k
+          del x_0_fd
+          del x_0_ld
+          del x_0_batch
+          del grads
 
       #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
       utils.save_loss_log(loss_log, LOSS_LOG)
@@ -82,7 +94,7 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
 
     return state
 
-if __name__ == '__main__':
+def main():
     PROJECT_DIR=os.path.abspath('.')
     CHECKPOINT_DIR=os.path.abspath('/tmp/ddpm')
     LOSS_LOG= f'{PROJECT_DIR}/ddpm_loss_log.npy'
@@ -110,7 +122,6 @@ if __name__ == '__main__':
 
     path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
     training_data = mayo.get_training_data(path, 1089, 1289)
-    training_data = jnp.array([np.concatenate((fd.reshape(512, 512, 1), qd.reshape(512, 512, 1)), axis=2) for fd, qd in training_data])
 
     betas = jnp.linspace(MIN_BETA, MAX_BETA, K, dtype=jnp.float32) # noise variance
     alphas = 1- betas
@@ -120,5 +131,10 @@ if __name__ == '__main__':
     start = time.time()
     state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
     end = time.time()
-
     print(f'elapsed: {end - start}s')
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        print(f'Unexpected {e=}, {type(e)}')

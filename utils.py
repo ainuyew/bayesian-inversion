@@ -82,12 +82,13 @@ def create_training_state(params_file=None, key=None):
     neural_network = Unet(
         dim=64,
         dim_mults = (1, 2, 4,),
+        out_dim = 1,
     )
 
    # optimizer = optax.adam(learning_rate=1e-4, b1=.9, b2=.99, eps=1e-8)
     optimizer = optax.adam(learning_rate=2e-5)
 
-    params = neural_network.init(subkey, jnp.ones([1, 512, 512, 2]), jnp.ones((1,)))
+    params = neural_network.init(subkey, jnp.ones([1, 128, 128, 2]), jnp.ones((1,)))
     if params_file:
         params = load_pytree(params, params_file)
 

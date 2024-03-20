@@ -5,6 +5,7 @@ import zipfile
 import tqdm
 from pathlib import Path
 from io import BytesIO, TextIOWrapper
+from skimage.transform import resize
 
 def unzip(zip_path):
     with zipfile.ZipFile(zip_path) as zf:
@@ -30,18 +31,19 @@ def get_training_data(folder, slice_start=0, slice_end=-1):
         file_paths = sorted(list(Path(search_path).rglob('*.IMA')))[slice_start:slice_end]
         for ima_file_path in tqdm.tqdm(file_paths, f'loading IMA files from {search_path}'):
             ima = pydicom.read_file(ima_file_path)
-            rows = ima.Rows
-            cols = ima.Columns
 
             pixel_array = ima.pixel_array
+
+            # resize image to run with local computer
+            pixel_array = resize(pixel_array, (pixel_array.shape[0] // 4, pixel_array.shape[1] // 4), anti_aliasing=True)
 
             # convert to HU
             hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
             densities = (hu_values + 1000)/1000
 
-            imas.append(densities)
+            imas.append(densities.reshape((densities.shape[0], densities.shape[1], 1)))
 
-    return list(zip(fd_imas, qd_imas))
+    return np.array(list(zip(fd_imas, qd_imas)))
 
 
 def main():
