@@ -21,30 +21,43 @@ def unzip(zip_path):
             files.append((name, dcm))
     return files
 
+def get_pixel_arrays(file_paths):
+    pixel_arrays = []
+    for ima_file_path in file_paths:
+        ima = pydicom.read_file(ima_file_path)
+
+        pixel_array = ima.pixel_array
+
+        # convert to HU
+        hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
+        densities = (hu_values + 1000)/1000
+
+        # resize image to run with local computer
+        densities = resize(densities, (densities.shape[0] // 4, densities.shape[1] // 4), anti_aliasing=True)
+
+        pixel_arrays.append(densities.reshape((densities.shape[0], densities.shape[1], 1)))
+
+    return pixel_arrays
+
 def get_training_data(folder, slice_start=0, slice_end=-1):
-    fd_imas = []
-    qd_imas = []
+    fd_data = []
+    ld_data = []
     fd_path=f'{folder}/full_3mm'
-    qd_path=f'{folder}/quarter_3mm'
+    ld_path=f'{folder}/quarter_3mm'
 
-    for search_path, imas in [(fd_path, fd_imas), (qd_path, qd_imas)]:
-        file_paths = sorted(list(Path(search_path).rglob('*.IMA')))[slice_start:slice_end]
-        for ima_file_path in tqdm.tqdm(file_paths, f'loading IMA files from {search_path}'):
-            ima = pydicom.read_file(ima_file_path)
+    patients=sorted([p for p in os.listdir(fd_path) if not p.startswith('.')])
 
-            pixel_array = ima.pixel_array
+    for patient in tqdm.tqdm(patients, f'loading patient data'):
+        fd_file_paths = sorted(list(Path(f'{fd_path}/{patient}').rglob('*.IMA')))[slice_start:slice_end]
+        ld_file_paths = sorted(list(Path(f'{ld_path}/{patient}').rglob('*.IMA')))[slice_start:slice_end]
 
-            # resize image to run with local computer
-            pixel_array = resize(pixel_array, (pixel_array.shape[0] // 4, pixel_array.shape[1] // 4), anti_aliasing=True)
+        fd_pixel_arrays = get_pixel_arrays(fd_file_paths)
+        ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
 
-            # convert to HU
-            hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
-            densities = (hu_values + 1000)/1000
+        fd_data[0:0] = fd_pixel_arrays # concatenate two lists
+        ld_data[0:0] = ld_pixel_arrays
 
-            imas.append(densities.reshape((densities.shape[0], densities.shape[1], 1)))
-
-    return np.array(list(zip(fd_imas, qd_imas)))
-
+    return np.array(list(zip(fd_data, ld_data)))
 
 def main():
     #path='/Volumes/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'

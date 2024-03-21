@@ -40,7 +40,15 @@
 ** 2024-03-20
 - Training code is crashing with high memory consumption. Reducing number of images did not help. Will need to scale image down to see if that helps.
 - It might be worthwhile to try to run this on another library from jax in case that is the problem. There are plenty of Unet implementations on CT scans e.g. https://medium.com/@fabio.sancinetti/u-net-convnet-for-ct-scan-segmentation-6cc0d465eed3. Unet was afterall created for modeling image segmentation problems for medical applications [cite:@ronneberger2015_u-net_convolutional_networks].
-
+** 2024-03-21
+- Successfully train DDPM using smaller images (128x128 instead of 512x512) with very small loss. Working on sampling code for DDPM. Will need to retrain DDPM on 90% data to reserve remaining 10% for testing.
+- Need to investigate on how to measure success/failure. This should largely follow the paper [cite:@adler2018_deep_bayesian_inversion].
+- Outstanding tasks/ideas:
+  - CEM code
+  - code to create more sample data (based on ODL library) from full dose Helical sinograms?
+  - the condition is based on quarter dose images. do we need different dosage?
+  - run model on full resolution 512x512
+  - Mayo test data has quarter dose (and omits full dose). Lesion information is available. Some qualitative checks can be performed to see if samples show the lesions in a clearer manner?
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -196,7 +204,7 @@ Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and com
   import utils
 
   path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-  training_data = mayo.get_training_data(path, 1089, 1289)
+  training_data = mayo.get_training_data(path, 112, 113) # pull the middle slices of each patient
   fd_ima, qd_ima = training_data[len(training_data) // 2]
   noise = fd_ima - qd_ima
 
@@ -217,12 +225,10 @@ Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and com
 
 #+RESULTS:
 :RESULTS:
-: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/full_3mm: 100% 200/200 [00:00<00:00, 637.58it/s]
+: loading patient data: 100% 10/10 [00:00<00:00, 65.98it/s]
 :
-: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/quarter_3mm: 100% 200/200 [00:00<00:00, 656.68it/s]
-:
-: noise: 0.0182
-[[file:./.ob-jupyter/4f73051cb4e57d44caff601d7dfd131deed886f5.png]]
+: noise: 0.00468
+[[file:./.ob-jupyter/87b4f042c9bbc291a64110740ae09645af97d617.png]]
 :END:
 
 Next, we explore if we can reconstruct images from Mayo's full dose projections (Helical scans), and how it compares with the provided images reconstructed using commercial software (weighted FBP).
@@ -355,7 +361,7 @@ DDPM specific parameters.
 
   SEED=42
   MIN_BETA, MAX_BETA = 1e-4, 0.02
-  K = 1000
+  K = 200
   N_EPOCH = 30
   BATCH_SIZE = 10
   PROJECT_DIR=os.path.abspath('.')
@@ -377,7 +383,7 @@ First, let's make sure we have the correct shapes for training data inputs and p
     key = random.PRNGKey(42)
     state = utils.create_training_state(key=key)
     path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-    training_data = mayo.get_training_data(path, 1184, 1194)
+    training_data = mayo.get_training_data(path, 112, 113)
 
     x_0_fd = training_data[:, 0]
     x_0_ld = training_data[:, 1]
@@ -385,15 +391,13 @@ First, let's make sure we have the correct shapes for training data inputs and p
     n = training_data.shape[0]
     k = random.choice(key, np.arange(200), shape=(n,))
     predictions = state.apply_fn(state.params, x_k, k)
-    print(f'training input shape (x_t, t): {x_k.shape}', {k.shape})
+    print(f'training input shape (x_t, t): {x_k.shape}, {k.shape}')
     print(f'predictions shape (x_0): {predictions.shape}')
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/full_3mm: 100% 10/10 [00:00<00:00, 216.34it/s]
-:
-: loading IMA files from /Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30/quarter_3mm: 100% 10/10 [00:00<00:00, 220.53it/s]
+: loading patient data: 100% 10/10 [00:00<00:00, 76.08it/s]
 :
 : training input shape (x_t, t): (10, 128, 128, 2) {(10,)}
 : predictions shape (x_0): (10, 128, 128, 1)
@@ -405,9 +409,11 @@ Training is performed via a python script [[file:train_ddpm.py]]. We examine the
   import pandas as pd
   import matplotlib.pyplot as plt
   import seaborn as sns
+  import os
 
   import utils
 
+  PROJECT_DIR=os.path.abspath('.')
   ddpm_loss_log = utils.load_loss_log(f'{PROJECT_DIR}/ddpm_loss_log.npy')
 
   # plot losses
@@ -421,7 +427,7 @@ Training is performed via a python script [[file:train_ddpm.py]]. We examine the
 #+RESULTS:
 :RESULTS:
 #+attr_org: :width 484
-[[file:./.ob-jupyter/5e1419e04ffa8611806495b89d9dcbfafe0c4049.png]]
+[[file:./.ob-jupyter/863a672f33b571c6e5559996a193f87419c30391.png]]
 :END:
 
 ** Sampling
@@ -433,20 +439,23 @@ We sample images from the trained DDPM model.
   from jax import random
   import jax.numpy as jnp
   from tqdm import tqdm
+  import numpy as np
 
   import utils
-  from unet import Unet
+  import mayo
 
-  def sample(state, n, betas, key):
+  def sample(state, condition, n, betas, key):
     # random white noise X_T
     key, subkey = random.split(key)
-    x_k = random.normal(subkey, shape=(n, 28, 28, 1))
+    x_k = random.normal(subkey, shape=(n, condition.shape[0], condition.shape[1], 1))
 
     #dts = np.array([ts[i] - ts[i-1] for i in range(1, steps+1)])
     #betas = 1- np.exp(-dts)
     alphas = 1 - betas
     alpha_bars = jnp.cumprod(alphas)
     #alpha_bars = jnp.array([alphas[:i+1].prod() for i in range(len(alphas))]) # workaround for metal problem with jnp.cumprod
+
+    condition = np.repeat(condition.reshape((1, condition.shape[0], condition.shape[1], 1)), n, axis=0)
 
     # sample in reverse from T=10 to 0.0 in evenly distributed steps
     #for i in tqdm(range(steps)[::-1]):
@@ -460,7 +469,9 @@ We sample images from the trained DDPM model.
       sigma_k = jnp.sqrt(beta) # option 1; see DDPM 3.2
       #sigma_k = jnp.sqrt((1-alpha_bars[k-1])/(1 - alpha_bar_k) * beta) # option 2; see DDPM 3.2
 
-      x_k = 1/jnp.sqrt(alpha) * (x_k - beta/jnp.sqrt(1 - alpha_bar_k) * state.apply_fn(state.params, x_k, k * jnp.ones((x_k.shape[0], )))) + sigma_k * z
+      inputs = jnp.concatenate((x_k, condition), axis=-1)
+
+      x_k = 1/jnp.sqrt(alpha) * (x_k - beta/jnp.sqrt(1 - alpha_bar_k) * state.apply_fn(state.params, inputs, k * jnp.ones((x_k.shape[0], )))) + sigma_k * z
 
       x_k = jnp.clip(x_k, -1., 1.) # should we clip ...
       #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
@@ -476,21 +487,51 @@ We sample images from the trained DDPM model.
 
   betas = jnp.linspace(MIN_BETA, MAX_BETA, K)
 
-  # generate x_0 from noise
-  key, subkey = random.split(key)
-  x_0_tilde = sample(ddpm_state, 4, betas, subkey)
+  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path, 112, 113)
+  n = (len(training_data) // 10) * 9
+  test_data = training_data[n:]
+  test_data = []
 
-  # plot the data
-  utils.show_img_grid(utils.unnormalize_image(x_0_tilde))
+  #samples = []
+
+  for x_0 in test_data:
+    fd_data, ld_data = x_0
+
+    # generate x_0 from noise
+    key, subkey = random.split(key)
+    x_0_tilde = sample(ddpm_state, ld_data, 10, betas, subkey)
+
+    for fd_data_tilde in x_0_tilde:
+      error = fd_data - fd_data_tilde
+      samples.append((fd_data, ld_data, fd_data_tilde, error))
+
+
+  print(f'mean error: {np.mean([error for _, _, _, error in samples])}')
+
+  # plot and compare last sample
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.normalize_image_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.normalize_image_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("DDPM")
+  _ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(x_0_tilde[-1]), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("error")
+  _ = axs[1, 1].imshow(fd_data - x_0_tilde[-1], cmap=plt.cm.Greys_r, **imkwargs)
+
+  plt.show()
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-: 2024-03-07 08:56:45.170093: W external/xla/xla/service/gpu/nvptx_compiler.cc:742] The NVIDIA driver's CUDA version is 12.0 which is older than the ptxas CUDA version (12.4.99). Because the driver is older than the ptxas version, XLA is disabling parallel compilation, which may slow down compilation. You should update your NVIDIA driver or use the NVIDIA-provided CUDA forward compatibility packages.
-: using parameters from epoch 8 with loss 0.02443
-: 100% 1000/1000 [14:06<00:00,  1.18it/s]
-#+attr_org: :width 529
-[[file:./.ob-jupyter/366e5ecd5190dcfa0dfd0afc39a52d418f35ab5e.png]]
+: using parameters from epoch 9 with loss 0.00642
+: loading patient data: 100% 10/10 [00:00<00:00, 63.88it/s]mean error: 0.7288914322853088
+:
+:
+[[file:./.ob-jupyter/0a34a41cd34492777e0170873512040d48cf0aa9.png]]
 :END:
 
 * CEM
@@ -531,6 +572,7 @@ Training is performed via a python script [[file:train_cem.py]]. We examine the 
 #+attr_org: :width 484
 [[file:./.ob-jupyter/6a99d9467be35764e879e334f59da6c04468e95f.png]]
 :END:
+
 
 ** Sampling
 We sample images from the trained CEM model.

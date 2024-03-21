@@ -166,7 +166,7 @@ def normalize_to_zero_to_one(x):
 def normalize_to_neg_one_to_one(x):
     return normalize_to_zero_to_one(x) * 2 - 1
 
-def normalize_image(x):
+def normalize_image_to_greyscale(x):
     return (normalize_to_zero_to_one(x) * 255).astype("uint8")
 
 def unnormalize_image(xs):

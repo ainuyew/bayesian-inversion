@@ -95,16 +95,6 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
     return state
 
 def main():
-    PROJECT_DIR=os.path.abspath('.')
-    CHECKPOINT_DIR=os.path.abspath('/tmp/ddpm')
-    LOSS_LOG= f'{PROJECT_DIR}/ddpm_loss_log.npy'
-    SEED=42
-    BATCH_SIZE=10
-    N_EPOCH=10
-    MIN_BETA=1e-4
-    MAX_BETA=.02
-    K = 200
-    PATIENCE=5
 
     key = random.PRNGKey(SEED)
     key, key2, key3 = random.split(key, 3)
@@ -121,7 +111,9 @@ def main():
         #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
     path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-    training_data = mayo.get_training_data(path, 1089, 1289)
+    training_data = mayo.get_training_data(path)
+    n = (len(training_data) // 10) * 9
+    training_data = training_data[:n] # use data from first 9 patients for training
 
     betas = jnp.linspace(MIN_BETA, MAX_BETA, K, dtype=jnp.float32) # noise variance
     alphas = 1- betas
@@ -132,6 +124,17 @@ def main():
     state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
     end = time.time()
     print(f'elapsed: {end - start}s')
+
+PROJECT_DIR=os.path.abspath('.')
+CHECKPOINT_DIR=os.path.abspath('/tmp/ddpm')
+LOSS_LOG= f'{PROJECT_DIR}/ddpm_loss_log.npy'
+SEED=42
+BATCH_SIZE=10
+N_EPOCH=10
+MIN_BETA=1e-4
+MAX_BETA=.02
+K = 200
+PATIENCE=5
 
 if __name__ == '__main__':
     try:
