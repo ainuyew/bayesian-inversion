@@ -98,7 +98,7 @@ if __name__ == '__main__':
     CHECKPOINT_DIR=os.path.abspath('/tmp/cem')
     LOSS_LOG= f'{PROJECT_DIR}/cem_loss_log.npy'
     SEED=42
-    BATCH_SIZE=5
+    BATCH_SIZE=10
     N_EPOCH=1000
     T = 10.
     K = 200
@@ -118,7 +118,7 @@ if __name__ == '__main__':
         state = utils.create_training_state(key=key2)
         #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    path='/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    path=os.path.abspath('data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30')
     training_data = mayo.get_training_data(path)
     n = (len(training_data) // 10) * 9
     training_data = training_data[:n] # use data from first 9 patients for training

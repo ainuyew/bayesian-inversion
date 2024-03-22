@@ -110,7 +110,7 @@ def main():
         state = utils.create_training_state(key=key2)
         #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
     training_data = mayo.get_training_data(path)
     n = (len(training_data) // 10) * 9
     training_data = training_data[:n] # use data from first 9 patients for training
