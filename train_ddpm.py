@@ -55,7 +55,7 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
           n = x_0_batch.shape[0]
           k = random.choice(key2, ks, shape=(n,))
           alpha_bar_k = alpha_bars[k, None, None, None] # (n, ) -> (n, 1, 1, 1)
-          eta = random.normal(key3, shape=x_0_fd.shape) # (n, 28, 28, 1)
+          eta = random.normal(key3, shape=x_0_fd.shape) # (n, 128, 128, 1)
 
           x_k_fd = forward_process(x_0_fd, alpha_bar_k, eta)
           x_k = jnp.concatenate((x_k_fd, x_0_ld), axis=-1)
@@ -130,7 +130,7 @@ CHECKPOINT_DIR=os.path.abspath('/tmp/ddpm')
 LOSS_LOG= f'{PROJECT_DIR}/ddpm_loss_log.npy'
 SEED=42
 BATCH_SIZE=10
-N_EPOCH=10
+N_EPOCH=1000
 MIN_BETA=1e-4
 MAX_BETA=.02
 K = 200

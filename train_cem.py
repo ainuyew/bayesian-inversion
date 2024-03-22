@@ -25,7 +25,7 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
         return jnp.where(t>0.0, t/(jnp.exp(t)-1.), jnp.ones(t.shape))
 
     @jit
-    def weighted_mse_loss(params, inputs, time, targets):
+    def weighted_mse_loss(params, inputs, time, targets) -> jnp.float32:
         assert inputs.shape[0] == time.shape[0]
 
         n = targets.shape[0]
@@ -44,48 +44,52 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
     ks = jnp.array(range(len(time_schedule)))
 
     for epoch in range(epoch_start, n_epoch):
-      key, subkey = random.split(key)
-      perms = random.permutation(subkey, training_data.shape[0])
-      perms = perms[: n_batch * batch_size] # skip incomplete batch
-      perms = perms.reshape((n_batch, batch_size))
+        key, subkey = random.split(key)
+        perms = random.permutation(subkey, training_data.shape[0])
+        perms = perms[: n_batch * batch_size] # skip incomplete batch
+        perms = perms.reshape((n_batch, batch_size))
+        loss_log = []
 
-      loss_log = []
+        for perm in tqdm(perms, desc=f'epoch {epoch}'):
 
-      for perm in tqdm(perms, desc=f'epoch {epoch}'):
+            # randomly pick a subset of the entire sample size
+            x_0_batch = training_data[perm, ...]
 
-          # randomly pick a subset of the entire sample size
-          x_0_batch = training_data[perm, ...]
+            x_0_fd = x_0_batch[:, 0]
+            x_0_ld = x_0_batch[:, 1]
 
-          # regenerate a new random keys
-          key, key2, key3 = random.split(key, 3)
+            # regenerate a new random keys
+            key, key2, key3 = random.split(key, 3)
 
-          t = random.choice(key2, time_schedule, shape=(x_0_batch.shape[0],))
-          eta = random.normal(key3, shape=x_0_batch.shape)
+            n = x_0_batch.shape[0]
+            t = random.choice(key2, time_schedule, shape=(x_0_batch.shape[0],))
+            eta = random.normal(key3, shape=x_0_fd.shape)
 
-          training_inputs = forward_process(x_0_batch, t, eta)
-          training_targets = x_0_batch
+            x_k_fd = forward_process(x_0_fd, t, eta)
+            training_inputs = jnp.concatenate((x_k_fd, x_0_ld), axis=-1)
+            training_targets = x_0_fd
 
-          loss, grads = value_and_grad(weighted_mse_loss)(state.params, training_inputs, t, training_targets)
+            loss, grads = value_and_grad(weighted_mse_loss)(state.params, training_inputs, t, training_targets)
 
-          state = state.apply_gradients(grads=grads)
+            state = state.apply_gradients(grads=grads)
 
-          step = step+1
-          loss_log.append((epoch, step, loss))
+            step = step+1
+            loss_log.append((epoch, step, loss))
 
-      utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
-      utils.save_loss_log(loss_log, LOSS_LOG)
+            #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
+            utils.save_loss_log(loss_log, LOSS_LOG)
 
-      epoch_loss = np.mean([loss for _, _, loss in loss_log])
+        epoch_loss = np.mean([loss for _, _, loss in loss_log])
 
-      if epoch_loss < best_loss:
-          best_loss = epoch_loss
-          utils.save_pytree(state.params, f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{best_loss:.5f}')
-          n_stale_epoch = 1
-      elif n_stale_epoch < patience:
-          n_stale_epoch += 1
-      else:
-          print(f'stop training early after {epoch} epochs with a best loss of {best_loss} ')
-          return state
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            utils.save_pytree(state.params, f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{best_loss:.5f}')
+            n_stale_epoch = 1
+        elif n_stale_epoch < patience:
+            n_stale_epoch += 1
+        else:
+            print(f'stop training early after {epoch} epochs with a best loss of {best_loss} ')
+            return state
 
     return state
 
@@ -94,8 +98,8 @@ if __name__ == '__main__':
     CHECKPOINT_DIR=os.path.abspath('/tmp/cem')
     LOSS_LOG= f'{PROJECT_DIR}/cem_loss_log.npy'
     SEED=42
-    BATCH_SIZE=1000
-    N_EPOCH=10
+    BATCH_SIZE=5
+    N_EPOCH=1000
     T = 10.
     K = 200
     PATIENCE=5
@@ -112,11 +116,12 @@ if __name__ == '__main__':
         print(f'restore checkpoint from epoch {epoch_start} and step {step}')
     else:
         state = utils.create_training_state(key=key2)
-        utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
+        #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    path='/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
     training_data = mayo.get_training_data(path)
-    training_data = jnp.array([np.concatenate((fd.reshape(512, 512, 1), qd.reshape(512, 512, 1)), axis=2) for fd, qd in training_data])
+    n = (len(training_data) // 10) * 9
+    training_data = training_data[:n] # use data from first 9 patients for training
 
     time_schedule = utils.exponential_time_schedule(T, K)[1:] # ignore 0.0
 
