@@ -99,7 +99,7 @@ if __name__ == '__main__':
     LOSS_LOG= f'{PROJECT_DIR}/cem_loss_log.npy'
     SEED=42
     BATCH_SIZE=10
-    N_EPOCH=1000
+    N_EPOCH=100
     T = 10.
     K = 200
     PATIENCE=5

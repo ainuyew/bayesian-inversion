@@ -510,7 +510,7 @@ We sample images from the trained DDPM model.
 
     # sample in reverse from T=10 to 0.0 in evenly distributed steps
     #for i in tqdm(range(steps)[::-1]):
-    for k in tqdm(range(len(betas))[::-1]):
+    for k in range(len(betas))[::-1]:
       alpha = alphas[k]
       beta = betas[k]
       alpha_bar_k = alpha_bars[k]
@@ -548,7 +548,7 @@ We sample images from the trained DDPM model.
   fd_data, ld_data = training_data[0]
   result = np.zeros(fd_data.shape)
 
-  for i in range(n_samples // BATCH_SIZE):
+  for i in tqdm(range(n_samples // BATCH_SIZE)):
     # generate x_0 from noise
     key, subkey = random.split(key)
     x_0_tilde = sample(ddpm_state, ld_data, BATCH_SIZE, betas, subkey)
@@ -753,7 +753,7 @@ We sample images from the trained CEM model.
 
     step=0
 
-    for k in tqdm(range(len(ts))[::-1]):
+    for k in range(len(ts))[::-1]:
       key, subkey = random.split(key)
       z = random.normal(subkey, shape=x_t.shape)
 
@@ -795,7 +795,7 @@ We sample images from the trained CEM model.
   fd_data, ld_data = training_data[0]
   result = np.zeros(fd_data.shape)
 
-  for i in range(n_samples // BATCH_SIZE):
+  for i in tqdm(range(n_samples // BATCH_SIZE)):
     # generate x_0 from noise
     key, subkey = random.split(key)
     x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
@@ -928,6 +928,8 @@ We sample images from the trained CEM model.
 100% 1002/1002 [07:23<00:00,  2.26it/s]
   error: 0.03399001061916351
 #+end_example
+[[file:.ob-jupyter/f1e44fcedb4f4f09cf31ea03ae71d2737c4df7ff.png]]
+:END:
 
 * Reads
 - Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html

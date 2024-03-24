@@ -32,8 +32,10 @@ def get_pixel_arrays(file_paths):
         hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
         densities = (hu_values + 1000)/1000
 
-        # resize image to run with local computer
+        # resize image to run with smaller ram/vram
         densities = resize(densities, (densities.shape[0] // 4, densities.shape[1] // 4), anti_aliasing=True)
+
+        densities = utils.normalize_to_neg_one_to_one(densities)
 
         pixel_arrays.append(densities.reshape((densities.shape[0], densities.shape[1], 1)))
 
