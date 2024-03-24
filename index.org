@@ -478,7 +478,7 @@ Training is performed via a python script [[file:train_ddpm.py]]. We examine the
 #+RESULTS:
 :RESULTS:
 #+attr_org: :width 484
-[[file:./.ob-jupyter/863a672f33b571c6e5559996a193f87419c30391.png]]
+[[file:./.ob-jupyter/98b946f3ee6dbe5becc443cc009687eff61363d4.png]]
 :END:
 
 ** Sampling
@@ -543,22 +543,21 @@ We sample images from the trained DDPM model.
   n = (len(training_data) // 10) * 9
   test_data = training_data[n:]
   test_data = []
+  n_samples = 1000
 
-  #samples = []
+  fd_data, ld_data = training_data[0]
+  result = np.zeros(fd_data.shape)
 
-  for x_0 in test_data:
-    fd_data, ld_data = x_0
-
+  for i in range(n_samples // BATCH_SIZE):
     # generate x_0 from noise
     key, subkey = random.split(key)
-    x_0_tilde = sample(ddpm_state, ld_data, 10, betas, subkey)
+    x_0_tilde = sample(ddpm_state, ld_data, BATCH_SIZE, betas, subkey)
 
-    for fd_data_tilde in x_0_tilde:
-      error = fd_data - fd_data_tilde
-      samples.append((fd_data, ld_data, fd_data_tilde, error))
+    result = result + np.sum(x_0_tilde, axis=0)
 
-
-  print(f'mean error: {np.mean([error for _, _, _, error in samples])}')
+  result = result / n_samples
+  error = fd_data - result
+  print(f'error: {np.mean(error)}')
 
   # plot and compare last sample
   imkwargs = dict(vmin=-0.2, vmax=0.2)
@@ -569,20 +568,126 @@ We sample images from the trained DDPM model.
   _ = axs[0, 1].set_title("quarter dose image")
   _ = axs[0, 1].imshow(utils.normalize_image_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
   _ = axs[1, 0].set_title("DDPM")
-  _ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(x_0_tilde[-1]), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(result), cmap=plt.cm.Greys_r)
   _ = axs[1, 1].set_title("error")
-  _ = axs[1, 1].imshow(fd_data - x_0_tilde[-1], cmap=plt.cm.Greys_r, **imkwargs)
+  _ = axs[1, 1].imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
 
   plt.show()
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-: using parameters from epoch 9 with loss 0.00642
-: loading patient data: 100% 10/10 [00:00<00:00, 63.88it/s]mean error: 0.7288914322853088
-:
-:
-[[file:./.ob-jupyter/0a34a41cd34492777e0170873512040d48cf0aa9.png]]
+#+begin_example
+  Platform 'METAL' is experimental and not all JAX functionality may be correctly supported!
+  2024-03-23 12:48:02.264962: W pjrt_plugin/src/mps_client.cc:563] WARNING: JAX Apple GPU support is experimental and not all JAX functionality is correctly supported!
+  Metal device set to: Apple M1
+  using parameters from epoch 22 with loss 0.00825
+  loading patient data: 100% 10/10 [00:00<00:00, 59.47it/s]
+
+  100% 200/200 [03:55<00:00,  1.18s/it]
+
+  100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:54<00:00,  1.17s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:53<00:00,  1.17s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+  error: 0.11948700249195099
+#+end_example
+[[file:./.ob-jupyter/da8b230284e5503497e7e30a76f4e73bb3cc5842.png]]
 :END:
 
 * CEM
