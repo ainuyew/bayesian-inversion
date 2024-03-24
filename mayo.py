@@ -7,6 +7,8 @@ from pathlib import Path
 from io import BytesIO, TextIOWrapper
 from skimage.transform import resize
 
+import utils
+
 def unzip(zip_path):
     with zipfile.ZipFile(zip_path) as zf:
         files = []
