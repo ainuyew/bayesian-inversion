@@ -293,8 +293,8 @@ def main():
     # Load a subset of the projection data
     #data_folder = mayo_dir + '/Training Cases/L067/full_DICOM-CT-PD'
     data_folder = mayo_dir + '/Training_Projection_Data/L067/DICOM-CT-PD_FD'
-    geometry, proj_data = load_projections(data_folder,
-                                                indices=slice(20000, 28000))
+    #geometry, proj_data = load_projections(data_folder, indices=slice(20000, 28000))
+    geometry, proj_data = load_projections(data_folder, indices=slice(20000, 21000))
 
     # Reconstruction space and ray transform
     space = odl.uniform_discr_frompartition(partition, dtype='float32')
@@ -304,7 +304,7 @@ def main():
     fbp = odl.tomo.fbp_op(ray_trafo, padding=True)
 
     # Tam-Danielsson window to handle redundant data
-    td_window = odl.tomo.tam_danielson_window(ray_trafo, n_pi=3)
+    td_window = odl.tomo.tam_danielson_window(ray_trafo, n_half_rot=3)
 
     # Calculate FBP reconstruction
     fbp_result = fbp(td_window * proj_data)
@@ -321,5 +321,11 @@ def main():
     ref.show('Reference (sagittal)', clim=[0.7, 1.3], coords=coords)
     (ref - fbp_result).show('Diff (sagittal)', clim=[-0.1, 0.1], coords=coords)
 
+    print('FIN')
+
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(e)
+        #print(f'Unexpected {e}, ({type(e)})')
