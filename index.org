@@ -53,6 +53,10 @@ description as a private header tag "WaterAttenuationCoefficient" (see https://w
 - managed to train DPPM and CEM on server. To update loss and numer of epochs.
 - managed to generate 1000 samples on M1 using jax-metal. The mean sample is not ideal. The problem might be the loss function used (MSE). DDPM was trained for 20 epochs on 90% training data. The sample was based on the remaining unseen 10% data.
 - unable to run odl sample code on local nvidia machine (ran out of memory). Will need to try this on the server.
+** 2024-03-26
+- Reading up on batch normalization. https://towardsdatascience.com/batch-norm-explained-visually-how-it-works-and-why-neural-networks-need-it-b18919692739, https://en.wikipedia.org/wiki/Batch_normalization, https://arxiv.org/abs/1502.03167.
+- CEM sampling (100 samples) with data rescaled to -1 to 1 seem to produce good samples. Next task at hand is to figure out if it's better than the low dose sample. We can do this by comparing how well the lesion can be seen in the contrast. See [cite:@adler2018_deep_bayesian_inversion].
+- Will want to consider to rescale data by z-score. mean and variance will be based on training data.
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -524,7 +528,8 @@ We sample images from the trained DDPM model.
 
       x_k = 1/jnp.sqrt(alpha) * (x_k - beta/jnp.sqrt(1 - alpha_bar_k) * state.apply_fn(state.params, inputs, k * jnp.ones((x_k.shape[0], )))) + sigma_k * z
 
-      x_k = jnp.clip(x_k, -1., 1.) # should we clip ...
+      #x_k = jnp.clip(x_k, -1., 1.) # should we clip ...
+      x_t = jnp.clip(x_t, -3., 3.)
       #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
 
     return x_k
@@ -779,7 +784,8 @@ We sample images from the trained CEM model.
     return x_t
 
   key = random.PRNGKey(SEED)
-  n_samples = 1000
+  n_samples = 100
+  samples = []
 
   # use the best params
   file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
@@ -787,148 +793,64 @@ We sample images from the trained CEM model.
   print(f'using parameters from epoch {epoch} with loss {loss}')
 
   ts = utils.exponential_time_schedule(T, K)
-  path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-  training_data = mayo.get_training_data(path, 112, 113)
+  #path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path, 36, 37)
   n = (len(training_data) // 10) * 9
   test_data = training_data[n:]
 
   fd_data, ld_data = training_data[0]
   result = np.zeros(fd_data.shape)
 
+  # define window parameters for abdominal scans
+  # range from -125HU to 225HU centered around 50HU
+  minval = -125
+  maxval = 225
+  midval = (maxval - minval)/2 + minval # 50 HU
+  wd = lambda x : utils.window_image(x, minval, maxval)
+
+  # rescale [-125HU, 225HU] to [-1, 1]
+  ld_data_windowed = (np.clip(ld_data, minval, maxval) - midval)/((maxval - minval)/2)
+
   for i in tqdm(range(n_samples // BATCH_SIZE)):
     # generate x_0 from noise
     key, subkey = random.split(key)
-    x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
+    x_0_tilde = sample(cem_state, ld_data_windowed, BATCH_SIZE, ts, subkey)
 
-    result = result + np.sum(x_0_tilde, axis=0)
+    # rescale in HU
+    x_0_tilde = x_0_tilde * (maxval - minval)/2 + midval
 
-  result = result / n_samples
-  error = fd_data - result
-  print(f'error: {np.mean(error)}')
+    samples.append(x_0_tilde)
+
+  sample_mean = np.mean(samples, axis=0)
+  sample_variance = np.var(samples, axis=0)
 
   # plot the data
   imkwargs = dict(vmin=-0.2, vmax=0.2)
   fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
   _ = fig.tight_layout()
   _ = axs[0, 0].set_title("full dose image")
-  _ = axs[0, 0].imshow(utils.normalize_image_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
   _ = axs[0, 1].set_title("quarter dose image")
-  _ = axs[0, 1].imshow(utils.normalize_image_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
-  _ = axs[1, 0].set_title("CEM")
-  _ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(result), cmap=plt.cm.Greys_r)
-  _ = axs[1, 1].set_title("error")
-  _ = axs[1, 1].imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
+  _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  _ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
 
   plt.show()
 #+end_src
 
 #+RESULTS:
-#+begin_example
-  using parameters from epoch 68 with loss 5e-05
-  loading patient data: 100% 10/10 [00:00<00:00, 78.92it/s]
-  100% 1002/1002 [07:31<00:00,  2.22it/s]
-  100% 1002/1002 [07:21<00:00,  2.27it/s]
-  100% 1002/1002 [07:26<00:00,  2.25it/s]
-  100% 1002/1002 [07:21<00:00,  2.27it/s]
-  100% 1002/1002 [07:23<00:00,  2.26it/s]
-  100% 1002/1002 [07:24<00:00,  2.25it/s]
-  100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:26<00:00,  2.25it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:18<00:00,  2.29it/s]
-100% 1002/1002 [07:19<00:00,  2.28it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:22<00:00,  2.26it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:27<00:00,  2.24it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:22<00:00,  2.26it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.26it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:27<00:00,  2.24it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:20<00:00,  2.27it/s]
-100% 1002/1002 [07:17<00:00,  2.29it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:22<00:00,  2.27it/s]
-100% 1002/1002 [07:22<00:00,  2.26it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:26<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:20<00:00,  2.27it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:27<00:00,  2.24it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:27<00:00,  2.24it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.26it/s]
-100% 1002/1002 [07:20<00:00,  2.27it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:22<00:00,  2.27it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:22<00:00,  2.27it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:22<00:00,  2.26it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:22<00:00,  2.27it/s]
-100% 1002/1002 [07:24<00:00,  2.26it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.26it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:26<00:00,  2.25it/s]
-100% 1002/1002 [07:26<00:00,  2.24it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:21<00:00,  2.27it/s]
-100% 1002/1002 [07:25<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:22<00:00,  2.26it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:22<00:00,  2.26it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-100% 1002/1002 [07:24<00:00,  2.25it/s]
-100% 1002/1002 [07:23<00:00,  2.26it/s]
-  error: 0.03399001061916351
-#+end_example
-[[file:.ob-jupyter/f1e44fcedb4f4f09cf31ea03ae71d2737c4df7ff.png]]
+:RESULTS:
+: using parameters from epoch 73 with loss 6e-05
+: loading patient data: 100% 10/10 [00:00<00:00, 60.13it/s]
+:
+: 100% 10/10 [3:15:07<00:00, 1170.71s/it]
+:
+: error: -0.015812324360013008
+[[file:./.ob-jupyter/2fc823732f5bee1ceac65ab637b5daee3bbfc03a.png]]
+:END:
 :END:
 
 * Reads

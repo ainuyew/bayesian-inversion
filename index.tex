@@ -1,4 +1,4 @@
-% Created 2024-03-21 Thu 11:27
+% Created 2024-03-27 Wed 09:00
 % Intended LaTeX compiler: pdflatex
 \documentclass[a4paper, 11pt]{article}
 \usepackage[utf8]{inputenc}
@@ -41,9 +41,9 @@
 
 
 \section{Log}
-\label{sec:org93d3e97}
+\label{sec:org7b05726}
 \subsection{2024-03-15\hfill{}\textsc{meeting}}
-\label{sec:org8bcc897}
+\label{sec:orgf9a5702}
 \begin{itemize}
 \item Professor Wang's server is downloading the Mayo training data.
 \item For this problem, CEM has to be conditioned on three parameters (instead of two), namely:
@@ -59,7 +59,7 @@
 \end{itemize}
 
 \subsection{2024-03-16}
-\label{sec:org78c6ba0}
+\label{sec:orgbddbe68}
 \begin{itemize}
 \item Found a paper and assodicated code to simulate low-dose samples at \url{https://github.com/smuzd/LD-CT-simulation/tree/master} ((Zeng, Dong and Huang, Jing and Bian, Zhaoying and Niu, Shanzhou and Zhang, Hua and Feng, Qianjin and Liang, Zhengrong and Ma, Jianhua, 2015)). The Matlab code is dependent on MIRT library (\url{https://github.com/JeffFessler/mirt}), which is not actively maintained (author has switched to Julia). The code fails to run on Octave.
 \item Found another github repository (\url{https://github.com/xinario/SAGAN}; \url{https://link.springer.com/article/10.1007/s10278-018-0056-0}) working on the CT scans with similar motives (to denoise low dosage CT scans). Octave does not support all the Matlab functions (e.g. function \texttt{fanbeam} in the image package) required by this code.
@@ -68,16 +68,18 @@
 \end{itemize}
 
 \subsection{2024-03-17}
-\label{sec:org4f78ef5}
+\label{sec:org484154e}
 \begin{itemize}
 \item \url{https://github.com/odlgroup/odl/issues/1569} add Poisson noise to projection data
 \item \url{https://github.com/odlgroup/odl/tree/25ec783954a85c2294ad5b76414f8c7c3cd2785d/odl/contrib/datasets/ct} code for mayo reconstruction by authors
 \end{itemize}
 \subsection{2024-03-18}
-\label{sec:org4ce5873}
+\label{sec:org241c149}
 \begin{itemize}
 \item Tried unsuccessfully to install python 3.8 to work with ODL (last released in 2018). ODL will only work with numpy < 1.20. The author has contributed the Mayo data code to ODL. Downloaded source code of ODL with the intent to correct/update the code to work with 3.10 and associated dependencies.
-\item DICOM public header tag "HUCalibrationFactor" is missing in the current DICOM-CT-PD files and have the same description as a private header tag "WaterAttenuationCoefficient" (see \url{https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4644156/}). This is neccessary to calibrate the projections to water (HU=0).
+\end{itemize}
+description as a private header tag "WaterAttenuationCoefficient" (see \url{https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4644156/}). This is neccessary to calibrate the projections to water (HU=0).
+\begin{itemize}
 \item Unable to run sample ODL code on M1. 3D geometry ray transformation requires CUDA. Sample code show how to create training data.
 \item There's matlab code  (\url{https://github.com/xinario/SAGAN/blob/master/poisson\_noise\_simulation/add\_poisson\_noise.m}) that details how it's done in reference to the paper ((Yi, Xin and Babyn, Paul, 2018)). The code adds noise to an image. The sinograms are created prior to adding of noise. A reconstructed image is returned by the function.
 \end{itemize}
@@ -90,7 +92,7 @@
 \item (Yi, Xin and Babyn, Paul, 2018) uses images from few subjects (36 subjects). Hence, there's little independence between the images.
 \end{itemize}
 \subsection{2024-03-19}
-\label{sec:orgdb2fa63}
+\label{sec:orgea51822}
 \begin{itemize}
 \item National Lung Screening Trial (NLST) at \url{https://wiki.cancerimagingarchive.net/display/NLST} has 11.TB of CT scans/images for 26,254 subjects.
 \item \url{https://huggingface.co/docs/diffusers/v0.25.0/en/api/models/unet2d-cond} has a conditional U-Net that ".. takes a noisy sample, conditional state, and a timestep and returns a sample shaped output.".
@@ -98,13 +100,13 @@
 \item Worked on code to train DDPM.
 \end{itemize}
 \subsection{2024-03-20}
-\label{sec:orgc0c50fa}
+\label{sec:orge5c3100}
 \begin{itemize}
 \item Training code is crashing with high memory consumption. Reducing number of images did not help. Will need to scale image down to see if that helps.
 \item It might be worthwhile to try to run this on another library from jax in case that is the problem. There are plenty of Unet implementations on CT scans e.g. \url{https://medium.com/@fabio.sancinetti/u-net-convnet-for-ct-scan-segmentation-6cc0d465eed3}. Unet was afterall created for modeling image segmentation problems for medical applications (Ronneberger, Olaf and Fischer, Philipp and Brox, Thomas, 2015).
 \end{itemize}
 \subsection{2024-03-21}
-\label{sec:org062a791}
+\label{sec:orgbc43217}
 \begin{itemize}
 \item Successfully train DDPM using smaller images (128x128 instead of 512x512) with very small loss. Working on sampling code for DDPM. Will need to retrain DDPM on 90\% data to reserve remaining 10\% for testing.
 \item Need to investigate on how to measure success/failure. This should largely follow the paper (Adler, Jonas and Öktem, Ozan, 2018).
@@ -117,8 +119,22 @@
 \item Mayo test data has quarter dose (and omits full dose). Lesion information is available. Some qualitative checks can be performed to see if samples show the lesions in a clearer manner?
 \end{itemize}
 \end{itemize}
+\subsection{2024-03-23}
+\label{sec:orgc1baab9}
+\begin{itemize}
+\item managed to train DPPM and CEM on server. To update loss and numer of epochs.
+\item managed to generate 1000 samples on M1 using jax-metal. The mean sample is not ideal. The problem might be the loss function used (MSE). DDPM was trained for 20 epochs on 90\% training data. The sample was based on the remaining unseen 10\% data.
+\item unable to run odl sample code on local nvidia machine (ran out of memory). Will need to try this on the server.
+\end{itemize}
+\subsection{2024-03-26}
+\label{sec:orge28b071}
+\begin{itemize}
+\item Reading up on batch normalization. \url{https://towardsdatascience.com/batch-norm-explained-visually-how-it-works-and-why-neural-networks-need-it-b18919692739}, \url{https://en.wikipedia.org/wiki/Batch\_normalization}, \url{https://arxiv.org/abs/1502.03167}.
+\item CEM sampling (100 samples) with data rescaled to -1 to 1 seem to produce good samples. Next task at hand is to figure out if it's better than the low dose sample. We can do this by comparing how well the lesion can be seen in the contrast. See (Adler, Jonas and Öktem, Ozan, 2018).
+\item Will want to consider to rescale data by z-score. mean and variance will be based on training data.
+\end{itemize}
 \section{Problem Statement}
-\label{sec:org45ae278}
+\label{sec:org1b5de5b}
 This is an investigation into the use of diffusion models to solve the problem discussed in (Adler, Jonas and Öktem, Ozan, 2018). Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ((Adler, Jonas and Öktem, Ozan, 2018)) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
 In a CT scan of a subjectsbegy2pts, multiple 2D projections are generated for each angle of projection. Projections are created by the forward projection algorithm,and measures the attenutation (reduction in intensity) of the x-ray beam (cast no the subject towards the deector). A sinogram consist of mutiple projections stacked together. We can then reconstruct a 3D image of the subject of interest through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
@@ -130,7 +146,7 @@ In (Adler, Jonas and Öktem, Ozan, 2018), we train two neural networks (GAN) to 
 (Moen, Taylor R. and Chen, Baiyu and Holmes III, David R. and Duan, Xinhui and Yu, Zhicong and Yu, Lifeng and Leng, Shuai and Fletcher, Joel G. and McCollough, Cynthia H., 2021) provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections by adding Poisson noise.
 
 \subsection{Filtered Back Projection (FBP)}
-\label{sec:orgede913a}
+\label{sec:org58d0085}
 Found a site on filtered back projection \url{https://howradiologyworks.com/filtered-backprojection-fbp-illustrated-guide-for-radiologic-technologists/\#:\~:text=Back\%20projection\%20is\%20the\%20process,Filtered\%20Backprojection\%20and\%20Iterative\%20Reconstruction}. A traditional x-ray scan gives us a 2d image of a subject of interest from a view (usually in front of the patient for a chest scan). One 2d image does not provide us a very good understanding of the subject. A forward projection algorithm instead takes multiple 2d images of a the subject from multiple and different angles/views. The end results are \uline{sinograms}. Each line/row in a sinogram corresponds to 2d image taken of the subject at particular view. A sinogram is so named because each point in the subject corresponds traces a sinusoid curve.
 
 Given knowledge of how a forward projection works, we can reverse the process (which we call back projection) to reconstruct an image of the subject. Because the back projection (BP) is performed one view at a time, the resulting reconstructed image is a blurred image (\url{https://www.youtube.com/watch?v=YvYIkbiRMy0}). To remedy this problem, we can apply a sharpening step (or image deblurring). This image deblurring can be applied in three different manner:
@@ -142,7 +158,7 @@ Given knowledge of how a forward projection works, we can reverse the process (w
 The second option (called Filtered Back Projection or FBP) is the most common as it is fast and robust. Back projection is the process of mapping the data from the detector space to the image space, while forward projection is the process of mapping the data in the image space to the detector space.
 
 \section{Data}
-\label{sec:orgb60ad2d}
+\label{sec:org60d48d4}
 We use data from 2016 Low Dose CT Grand Challenge (\url{https://www.aapm.org/grandchallenge/lowdosect/\#testDatasets}). Training data is downloaded from box at \url{https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h}. (\url{https://www.imagewisely.org/Imaging-Modalities/Computed-Tomography/Image-Reconstruction-Techniques}) The data contains images reconstructed using two reconstruction kernels B30 and D45. Reconstruction kernels (also called “filter” or “algorithm”) affects the image quality. There is a tradeoff between spatial resolution and noise. A smoother kernel generates images with lower noise but with reduced spatial resolution. A sharper kernel generates images with higher spatial resolution, but increases the image noise. Spatial resolution in CT is the ability to differentiate objects of different density. A high spatial resolution is important to distinguish objects that are close to one another.
 
 Patient\textsubscript{Data} directory contains the reconstructed images and projections (in DICOM-CT-PD format) of the CT scans.
@@ -316,7 +332,7 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
 #import numpy as np
 #from pathlib import Path
 
-path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'
+path='/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'
 
 dcm_path=f'{path}/Training_Projection_Data/L067'
 dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
@@ -324,7 +340,7 @@ dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
 import odl
 from odl.contrib.datasets.ct import mayo
 
-mayo_dir = '/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
+mayo_dir = '/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
 
 # Load reference reconstruction
 #volume_folder = mayo_dir + '/Training Cases/L067/full_1mm_sharp'
@@ -377,60 +393,104 @@ ref.show('Reference (sagittal)', clim=[0.7, 1.3], coords=coords)
 \end{minted}
 
 \begin{verbatim}
-loading volume data: 100% 223/223 [00:00<00:00, 669.45it/s]
 
-Loading projection data: 100% 8000/8000 [00:04<00:00, 1659.23it/s]
+ImportErrorTraceback (most recent call last)
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
+     14 try:
+---> 15     from numpy import take_along_axis
+     16 except ImportError:  # pragma: no cover
 
-3
-\end{verbatim}
+ImportError: cannot import name 'take_along_axis'
 
-\begin{verbatim}
----------------------------------------------------------------------------
-ValueError                                Traceback (most recent call last)
-Cell In[1], line 24
-     21 # Load a subset of the projection data
-     22 #data_folder = mayo_dir + '/Training Cases/L067/full_DICOM-CT-PD'
-     23 data_folder = mayo_dir + '/Training_Projection_Data/L067/DICOM-CT-PD_FD'
----> 24 geometry, proj_data = mayo.load_projections(data_folder,
-     25                                           indices=slice(20000, 28000))
-     27 # Reconstruction space and ray transform
-     28 space = odl.uniform_discr_frompartition(partition, dtype='float32')
+During handling of the above exception, another exception occurred:
 
-File ~/Documents/bayesian-inversion/odl/contrib/datasets/ct/mayo.py:183, in load_projections(folder, indices)
-    181 # Create a *temporary* ray transform (we need its range)
-    182 spc = odl.uniform_discr([-1] * 3, [1] * 3, [32] * 3)
---> 183 ray_trafo = odl.tomo.RayTransform(spc, geometry, interp='linear')
-    185 # convert coordinates
-    186 theta, up, vp = ray_trafo.range.grid.meshgrid
+AttributeErrorTraceback (most recent call last)
+<ipython-input-1-c46f9b485a61> in <module>
+      9 dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
+     10 
+---> 11 import odl
+     12 from odl.contrib.datasets.ct import mayo
+     13 
 
-File ~/Documents/bayesian-inversion/odl/tomo/operators/ray_trafo.py:381, in RayTransform.__init__(self, domain, geometry, **kwargs)
-    337 """Initialize a new instance.
-    338
-    339 Parameters
-   (...)
-    378 and storage order 'C'. Otherwise copies will be needed.
-    379 """
-    380 range = kwargs.pop('range', None)
---> 381 super(RayTransform, self).__init__(
-    382     reco_space=domain, proj_space=range, geometry=geometry,
-    383     variant='forward', **kwargs)
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/__init__.py in <module>
+     64 from . import phantom
+     65 from . import solvers
+---> 66 from . import tomo
+     67 from . import trafos
+     68 from . import ufunc_ops
 
-File ~/Documents/bayesian-inversion/odl/tomo/operators/ray_trafo.py:160, in RayTransformBase.__init__(self, reco_space, geometry, variant, **kwargs)
-    158 if impl.startswith('astra'):
-    159     if geometry.ndim > 2 and impl.endswith('cpu'):
---> 160         raise ValueError('`impl` {!r} only works for 2d'
-    161                          ''.format(impl))
-    163     # Print a warning if the detector midpoint normal vector at any
-    164     # angle is perpendicular to the geometry axis in parallel 3d
-    165     # single-axis geometry -- this is broken in some ASTRA versions
-    166     if (isinstance(geometry, Parallel3dAxisGeometry) and
-    167             not astra_supports('par3d_det_mid_pt_perp_to_axis')):
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/__init__.py in <module>
+     17 __all__ += geometry.__all__
+     18 
+---> 19 from .backends import *
+     20 __all__ += backends.__all__
+     21 
 
-ValueError: `impl` 'astra_cpu' only works for 2d
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/__init__.py in <module>
+     22 __all__ += astra_cuda.__all__
+     23 
+---> 24 from .skimage_radon import *
+     25 __all__ += skimage_radon.__all__
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/skimage_radon.py in <module>
+     12 import numpy as np
+     13 try:
+---> 14     import skimage
+     15     SKIMAGE_AVAILABLE = True
+     16 except ImportError:
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/__init__.py in <module>
+    125 
+    126     # All skimage root imports go here
+--> 127     from .util.dtype import (img_as_float32,
+    128                              img_as_float64,
+    129                              img_as_float,
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/__init__.py in <module>
+      4 from .shape import view_as_blocks, view_as_windows
+      5 from .noise import random_noise
+----> 6 from .apply_parallel import apply_parallel
+      7 
+      8 from .arraycrop import crop
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/apply_parallel.py in <module>
+      6 
+      7 try:
+----> 8     import dask.array as da
+      9     dask_available = True
+     10 except ImportError:
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/__init__.py in <module>
+      1 try:
+----> 2     from .blockwise import blockwise, atop
+      3     from .core import (
+      4         Array,
+      5         block,
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/blockwise.py in <module>
+    286 
+    287 
+--> 288 from .core import new_da_object
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/core.py in <module>
+     20 import numpy as np
+     21 
+---> 22 from . import chunk
+     23 from .. import config, compute
+     24 from ..base import (
+
+~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
+     15     from numpy import take_along_axis
+     16 except ImportError:  # pragma: no cover
+---> 17     take_along_axis = npcompat.take_along_axis
+     18 
+     19 
+
+AttributeError: module 'dask.array.numpy_compat' has no attribute 'take_along_axis'
 \end{verbatim}
 
 \section{DDPM}
-\label{sec:org9277717}
+\label{sec:org249e0d8}
 DDPM specific parameters.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import os
@@ -444,7 +504,7 @@ PROJECT_DIR=os.path.abspath('.')
 \end{minted}
 
 \subsection{Training}
-\label{sec:org26d8269}
+\label{sec:org2105e76}
 First, let's make sure we have the correct shapes for training data inputs and predictions.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 from jax import random
@@ -497,11 +557,11 @@ _ = plt.show()
 \end{minted}
 
 \begin{center}
-\includegraphics[width=.9\linewidth]{./.ob-jupyter/863a672f33b571c6e5559996a193f87419c30391.png}
+\includegraphics[width=.9\linewidth]{./.ob-jupyter/98b946f3ee6dbe5becc443cc009687eff61363d4.png}
 \end{center}
 
 \subsection{Sampling}
-\label{sec:org42d1236}
+\label{sec:org132098a}
 We sample images from the trained DDPM model.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import matplotlib.pyplot as plt
@@ -529,7 +589,7 @@ def sample(state, condition, n, betas, key):
 
   # sample in reverse from T=10 to 0.0 in evenly distributed steps
   #for i in tqdm(range(steps)[::-1]):
-  for k in tqdm(range(len(betas))[::-1]):
+  for k in range(len(betas))[::-1]:
     alpha = alphas[k]
     beta = betas[k]
     alpha_bar_k = alpha_bars[k]
@@ -543,7 +603,8 @@ def sample(state, condition, n, betas, key):
 
     x_k = 1/jnp.sqrt(alpha) * (x_k - beta/jnp.sqrt(1 - alpha_bar_k) * state.apply_fn(state.params, inputs, k * jnp.ones((x_k.shape[0], )))) + sigma_k * z
 
-    x_k = jnp.clip(x_k, -1., 1.) # should we clip ...
+    #x_k = jnp.clip(x_k, -1., 1.) # should we clip ...
+    x_t = jnp.clip(x_t, -3., 3.)
     #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
 
   return x_k
@@ -562,22 +623,21 @@ training_data = mayo.get_training_data(path, 112, 113)
 n = (len(training_data) // 10) * 9
 test_data = training_data[n:]
 test_data = []
+n_samples = 1000
 
-#samples = []
+fd_data, ld_data = training_data[0]
+result = np.zeros(fd_data.shape)
 
-for x_0 in test_data:
-  fd_data, ld_data = x_0
-
+for i in tqdm(range(n_samples // BATCH_SIZE)):
   # generate x_0 from noise
   key, subkey = random.split(key)
-  x_0_tilde = sample(ddpm_state, ld_data, 10, betas, subkey)
+  x_0_tilde = sample(ddpm_state, ld_data, BATCH_SIZE, betas, subkey)
 
-  for fd_data_tilde in x_0_tilde:
-    error = fd_data - fd_data_tilde
-    samples.append((fd_data, ld_data, fd_data_tilde, error))
+  result = result + np.sum(x_0_tilde, axis=0)
 
-
-print(f'mean error: {np.mean([error for _, _, _, error in samples])}')
+result = result / n_samples
+error = fd_data - result
+print(f'error: {np.mean(error)}')
 
 # plot and compare last sample
 imkwargs = dict(vmin=-0.2, vmax=0.2)
@@ -588,37 +648,140 @@ _ = axs[0, 0].imshow(utils.normalize_image_to_greyscale(fd_data), cmap=plt.cm.Gr
 _ = axs[0, 1].set_title("quarter dose image")
 _ = axs[0, 1].imshow(utils.normalize_image_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
 _ = axs[1, 0].set_title("DDPM")
-_ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(x_0_tilde[-1]), cmap=plt.cm.Greys_r)
+_ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(result), cmap=plt.cm.Greys_r)
 _ = axs[1, 1].set_title("error")
-_ = axs[1, 1].imshow(fd_data - x_0_tilde[-1], cmap=plt.cm.Greys_r, **imkwargs)
+_ = axs[1, 1].imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
 
 plt.show()
 \end{minted}
 
 \begin{verbatim}
-using parameters from epoch 9 with loss 0.00642
-loading patient data: 100% 10/10 [00:00<00:00, 63.88it/s]mean error: 0.7288914322853088
+  Platform 'METAL' is experimental and not all JAX functionality may be correctly supported!
+  2024-03-23 12:48:02.264962: W pjrt_plugin/src/mps_client.cc:563] WARNING: JAX Apple GPU support is experimental and not all JAX functionality is correctly supported!
+  Metal device set to: Apple M1
+  using parameters from epoch 22 with loss 0.00825
+  loading patient data: 100% 10/10 [00:00<00:00, 59.47it/s]
 
+  100% 200/200 [03:55<00:00,  1.18s/it]
 
+  100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:54<00:00,  1.17s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:53<00:00,  1.17s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+  error: 0.11948700249195099
 \end{verbatim}
-
 \begin{center}
-\includegraphics[width=.9\linewidth]{./.ob-jupyter/0a34a41cd34492777e0170873512040d48cf0aa9.png}
+\includegraphics[width=.9\linewidth]{./.ob-jupyter/da8b230284e5503497e7e30a76f4e73bb3cc5842.png}
 \end{center}
 
 \section{CEM}
-\label{sec:org0291c11}
+\label{sec:orge7a722e}
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import os
 
 SEED=42
 T=10.
 K=1000
-BATCH_SIZE = 1000
+BATCH_SIZE = 10
 PROJECT_DIR=os.path.abspath('.')
 \end{minted}
 \subsection{Training}
-\label{sec:orgeaa0634}
+\label{sec:orgc797b54}
 Training is performed via a python script \url{train\_cem.py}. We examine the average epoch loss with the following code:
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import pandas as pd
@@ -638,12 +801,11 @@ _ = plt.show()
 \end{minted}
 
 \begin{center}
-\includegraphics[width=.9\linewidth]{./.ob-jupyter/6a99d9467be35764e879e334f59da6c04468e95f.png}
+\includegraphics[width=.9\linewidth]{./.ob-jupyter/08881e0d9cccd48adbf93a280496bacfad22854b.png}
 \end{center}
 
-
 \subsection{Sampling}
-\label{sec:org2333e65}
+\label{sec:org10bb790}
 We sample images from the trained CEM model.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import matplotlib.pyplot as plt
@@ -651,25 +813,31 @@ import optax
 from jax import random
 import jax.numpy as jnp
 from tqdm import tqdm
+import numpy as np
 
 import utils
 from unet import Unet
+import mayo
 
-def sample(state, n, ts, key):
+def sample(state, condition, n, ts, key):
   # random white noise X_T
   key, subkey = random.split(key)
-  x_t = random.normal(subkey, shape=(n, 28, 28, 1))
+  x_t = random.normal(subkey, shape=(n, condition.shape[0], condition.shape[1], 1))
+
+  condition = np.repeat(condition.reshape((1, condition.shape[0], condition.shape[1], 1)), n, axis=0)
 
   step=0
 
-  for k in tqdm(range(len(ts))[::-1]):
+  for k in range(len(ts))[::-1]:
     key, subkey = random.split(key)
     z = random.normal(subkey, shape=x_t.shape)
 
     t = ts[k]
     dt = jnp.where(k > 0, t - ts[k-1], 0.)
 
-    f_theta = state.apply_fn(state.params, x_t, t * jnp.ones((n,)))
+    inputs = jnp.concatenate((x_t, condition), axis=-1)
+
+    f_theta = state.apply_fn(state.params, inputs, t * jnp.ones((n,)))
 
     # equation (40)
     s_theta = jnp.where(k > 0, x_t/(1-jnp.exp(-t))  - jnp.exp(-t/2)/(1-jnp.exp(-t)) * f_theta,  0.)
@@ -678,7 +846,8 @@ def sample(state, n, ts, key):
     x_t_bar = x_t - dt * s_theta
     x_t = jnp.exp(dt/2) * x_t_bar + jnp.sqrt(1-jnp.exp(-dt)) * z
 
-    x_t = jnp.clip(x_t, -1., 1.) # should we clip ...
+    #x_t = jnp.clip(x_t, -1., 1.) # should we clip ...
+    x_t = jnp.clip(x_t, -3., 3.)
     #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
 
     step=step+1
@@ -686,34 +855,66 @@ def sample(state, n, ts, key):
   return x_t
 
 key = random.PRNGKey(SEED)
+n_samples = 100
 
 # use the best params
 file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
-cem_state = utils.create_training_state(params_file=f'{PROJECT_DIR}/cem_params_{epoch}_{step}_{loss}.npy')
+cem_state = utils.create_training_state(params_file=file_path)
 print(f'using parameters from epoch {epoch} with loss {loss}')
 
 ts = utils.exponential_time_schedule(T, K)
+#path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+training_data = mayo.get_training_data(path, 112, 113)
+n = (len(training_data) // 10) * 9
+test_data = training_data[n:]
 
-# generate x_0 from noise
-key, subkey = random.split(key)
-x_0_tilde = sample(cem_state, 16, ts, subkey)
+fd_data, ld_data = training_data[0]
+result = np.zeros(fd_data.shape)
+
+for i in tqdm(range(n_samples // BATCH_SIZE)):
+  # generate x_0 from noise
+  key, subkey = random.split(key)
+  x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
+
+  result = result + np.sum(x_0_tilde, axis=0)
+
+result = result / n_samples
+error = fd_data - result
+print(f'error: {np.mean(error)}')
 
 # plot the data
-utils.show_img_grid(utils.unnormalize_image(x_0_tilde))
+imkwargs = dict(vmin=-0.2, vmax=0.2)
+fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+_ = fig.tight_layout()
+_ = axs[0, 0].set_title("full dose image")
+_ = axs[0, 0].imshow(utils.normalize_image_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+_ = axs[0, 1].set_title("quarter dose image")
+_ = axs[0, 1].imshow(utils.normalize_image_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+_ = axs[1, 0].set_title("CEM")
+_ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(result), cmap=plt.cm.Greys_r)
+_ = axs[1, 1].set_title("error")
+_ = axs[1, 1].imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
+
+plt.show()
 \end{minted}
 
 \begin{verbatim}
-using parameters from epoch 9 with loss 0.03557
-100% 1002/1002 [09:41<00:00,  1.72it/s]
+using parameters from epoch 73 with loss 6e-05
+loading patient data: 100% 10/10 [00:00<00:00, 60.13it/s]
 
+100% 10/10 [3:15:07<00:00, 1170.71s/it]
+
+error: -0.015812324360013008
 \end{verbatim}
 
 \begin{center}
-\includegraphics[width=.9\linewidth]{./.ob-jupyter/0f3f0e54e530983abb7d269c4c35266ac2b88c7c.png}
+\includegraphics[width=.9\linewidth]{./.ob-jupyter/2fc823732f5bee1ceac65ab637b5daee3bbfc03a.png}
 \end{center}
+:END:
 
 \section{Reads}
-\label{sec:orgef75c4c}
+\label{sec:orgfea6ca8}
 \begin{itemize}
 \item Quick summary on CR reconstruciton and Helical CT \url{http://xrayphysics.com/ctsim.html}
 \item Example to perform simple image reconstruction using scikit-image \url{https://scikit-image.org/docs/stable/auto\_examples/transform/plot\_radon\_transform.html}
@@ -734,7 +935,7 @@ using parameters from epoch 9 with loss 0.03557
 \item Alternative CT training data from piglets? \url{https://link.springer.com/article/10.1007/s10278-018-0056-0}
 \end{itemize}
 \section{References}
-\label{sec:org8d48630}
+\label{sec:org22f4503}
 \noindent
 Adler, Jonas and Öktem, Ozan (2018). \emph{Deep {{Bayesian Inversion}}}.
 

@@ -166,15 +166,13 @@ def normalize_to_zero_to_one(x):
 def normalize_to_neg_one_to_one(x):
     return normalize_to_zero_to_one(x) * 2 - 1
 
-def normalize_image_to_greyscale(x):
+def normalize_to_greyscale(x):
     return (normalize_to_zero_to_one(x) * 255).astype("uint8")
 
-def unnormalize_image(xs):
-    assert len(xs.shape) == 4
-    ys = []
-    for x in xs:
-      ys.append(normalize_to_zero_to_one(x) * 255)
-    return ys
+def window_image(x, minval, maxval):
+    x_prime = np.clip(x, minval, maxval)
+    midval = maxval - minval
+    return (x_prime - midval)/(maxval-minval) * 255
 
 def signal_to_noise_ratio(x, axis=0, ddof=0):
     x = np.asanyarray(x)

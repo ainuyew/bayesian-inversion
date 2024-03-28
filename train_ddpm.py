@@ -67,16 +67,6 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
           step = step+1
           loss_log.append((epoch, step, loss))
 
-          del k
-          del alpha_bar_k
-          del eta
-          del x_k_fd
-          del x_k
-          del x_0_fd
-          del x_0_ld
-          del x_0_batch
-          del grads
-
       #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
       utils.save_loss_log(loss_log, LOSS_LOG)
 
@@ -114,6 +104,11 @@ def main():
     training_data = mayo.get_training_data(path)
     n = (len(training_data) // 10) * 9
     training_data = training_data[:n] # use data from first 9 patients for training
+
+    # rescale by z-score
+    mu = np.mean(training_data)
+    sigma = np.std(training_data)
+    training_data = (training_data - mu)/sigma
 
     betas = jnp.linspace(MIN_BETA, MAX_BETA, K, dtype=jnp.float32) # noise variance
     alphas = 1- betas

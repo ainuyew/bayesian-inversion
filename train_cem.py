@@ -123,6 +123,12 @@ if __name__ == '__main__':
     n = (len(training_data) // 10) * 9
     training_data = training_data[:n] # use data from first 9 patients for training
 
+    # rescale by abdominal window
+    minval = -125 # -125 HU
+    maxval = 225 # 225 HU
+    midval = (maxval - minval)/2 + minval # 50 HU
+    training_data = (np.clip(training_data, minval, maxval) - midval)/((maxval - minval)/2)
+
     time_schedule = utils.exponential_time_schedule(T, K)[1:] # ignore 0.0
 
     start = time.time()
