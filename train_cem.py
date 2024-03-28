@@ -98,7 +98,7 @@ if __name__ == '__main__':
     CHECKPOINT_DIR=os.path.abspath('/tmp/cem')
     LOSS_LOG= f'{PROJECT_DIR}/cem_loss_log.npy'
     SEED=42
-    BATCH_SIZE=10
+    BATCH_SIZE=5
     N_EPOCH=100
     T = 10.
     K = 200
@@ -124,10 +124,9 @@ if __name__ == '__main__':
     training_data = training_data[:n] # use data from first 9 patients for training
 
     # rescale by abdominal window
-    minval = -125 # -125 HU
-    maxval = 225 # 225 HU
-    midval = (maxval - minval)/2 + minval # 50 HU
-    training_data = (np.clip(training_data, minval, maxval) - midval)/((maxval - minval)/2)
+    ww = 350 # range
+    wl = 50 # center
+    training_data = utils.window_image(training_data, ww, wl, out_range=(-1., 1.))
 
     time_schedule = utils.exponential_time_schedule(T, K)[1:] # ignore 0.0
 

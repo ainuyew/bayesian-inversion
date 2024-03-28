@@ -169,17 +169,18 @@ def normalize_to_neg_one_to_one(x):
 def normalize_to_greyscale(x):
     return (normalize_to_zero_to_one(x) * 255).astype("uint8")
 
-def window_image(x, minval, maxval):
-    x_prime = np.clip(x, minval, maxval)
-    midval = maxval - minval
-    return (x_prime - midval)/(maxval-minval) * 255
+def window_image(x: np.ndarray, ww: int, wl: int, out_range=(0., 255.)) -> np.ndarray:
+    lower = wl - (ww//2)
+    upper = lower + ww
+    clipped = np.clip(x, lower, upper)
+    out_lower, out_upper = out_range
+    return (clipped - lower)/ww * (out_upper - out_lower) - out_lower
 
 def signal_to_noise_ratio(x, axis=0, ddof=0):
     x = np.asanyarray(x)
     m = x.mean(axis)
     sd = x.std(axis=axis, ddof=ddof)
     return np.where(sd == 0, 0, m/sd)
-
 def peak_signal_to_noise_ratio(x, y):
     x = np.asanyarray(x)
     y = np.asanyarray(y)

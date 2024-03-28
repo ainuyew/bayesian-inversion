@@ -57,6 +57,10 @@ description as a private header tag "WaterAttenuationCoefficient" (see https://w
 - Reading up on batch normalization. https://towardsdatascience.com/batch-norm-explained-visually-how-it-works-and-why-neural-networks-need-it-b18919692739, https://en.wikipedia.org/wiki/Batch_normalization, https://arxiv.org/abs/1502.03167.
 - CEM sampling (100 samples) with data rescaled to -1 to 1 seem to produce good samples. Next task at hand is to figure out if it's better than the low dose sample. We can do this by comparing how well the lesion can be seen in the contrast. See [cite:@adler2018_deep_bayesian_inversion].
 - Will want to consider to rescale data by z-score. mean and variance will be based on training data.
+** 2024-03-29
+- preprocessing CT scans https://zapaishchykova.medium.com/preprocessing-ct-in-python-2a7e8170ac9f
+- open source software to read CT scans https://www.slicer.org
+- summart on windowing CT scans https://kevalnagda.github.io/ct-windowing
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -730,8 +734,12 @@ Training is performed via a python script [[file:train_cem.py]]. We examine the 
 
 #+RESULTS:
 :RESULTS:
+: /Users/huiyuanchua/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+:   with pd.option_context('mode.use_inf_as_na', True):
+: /Users/huiyuanchua/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+:   with pd.option_context('mode.use_inf_as_na', True):
 #+attr_org: :width 484
-[[file:./.ob-jupyter/08881e0d9cccd48adbf93a280496bacfad22854b.png]]
+[[file:./.ob-jupyter/9116398acd8b24680bfcc5c9c8c5b48242340955.png]]
 :END:
 
 ** Sampling
@@ -843,13 +851,63 @@ We sample images from the trained CEM model.
 
 #+RESULTS:
 :RESULTS:
-: using parameters from epoch 73 with loss 6e-05
-: loading patient data: 100% 10/10 [00:00<00:00, 60.13it/s]
+: Platform 'METAL' is experimental and not all JAX functionality may be correctly supported!
+: 2024-03-28 18:25:02.399715: W pjrt_plugin/src/mps_client.cc:563] WARNING: JAX Apple GPU support is experimental and not all JAX functionality is correctly supported!
+: Metal device set to: Apple M1
+: using parameters from epoch 59 with loss 0.00021
+: loading patient data: 100% 10/10 [00:00<00:00, 61.59it/s]
 :
-: 100% 10/10 [3:15:07<00:00, 1170.71s/it]
+: 100% 10/10 [3:13:29<00:00, 1161.00s/it]
 :
-: error: -0.015812324360013008
-[[file:./.ob-jupyter/2fc823732f5bee1ceac65ab637b5daee3bbfc03a.png]]
+# [goto error]
+#+begin_example
+  [0;31m---------------------------------------------------------------------------[0m
+  [0;31mTypeError[0m                                 Traceback (most recent call last)
+  Cell [0;32mIn[3], line 97[0m
+  [1;32m     95[0m _ [38;5;241m=[39m axs[[38;5;241m0[39m, [38;5;241m1[39m][38;5;241m.[39mimshow(wd(ld_data), cmap[38;5;241m=[39mplt[38;5;241m.[39mcm[38;5;241m.[39mGreys_r)
+  [1;32m     96[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m0[39m][38;5;241m.[39mset_title([38;5;124m"[39m[38;5;124mCEM mean[39m[38;5;124m"[39m)
+  [0;32m---> 97[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m0[39m][38;5;241m.[39mimshow(wd(sample_mean), cmap[38;5;241m=[39mplt[38;5;241m.[39mcm[38;5;241m.[39mGreys_r)
+  [1;32m     98[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m1[39m][38;5;241m.[39mset_title([38;5;124m"[39m[38;5;124mCEM variance[39m[38;5;124m"[39m)
+  [1;32m     99[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m1[39m][38;5;241m.[39mimshow(wd(sample_variance), [38;5;241m*[39m[38;5;241m*[39mimkwargs)
+
+  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/__init__.py:1465[0m, in [0;36m_preprocess_data.<locals>.inner[0;34m(ax, data, *args, **kwargs)[0m
+  [1;32m   1462[0m [38;5;129m@functools[39m[38;5;241m.[39mwraps(func)
+  [1;32m   1463[0m [38;5;28;01mdef[39;00m [38;5;21minner[39m(ax, [38;5;241m*[39margs, data[38;5;241m=[39m[38;5;28;01mNone[39;00m, [38;5;241m*[39m[38;5;241m*[39mkwargs):
+  [1;32m   1464[0m     [38;5;28;01mif[39;00m data [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m:
+  [0;32m-> 1465[0m         [38;5;28;01mreturn[39;00m func(ax, [38;5;241m*[39m[38;5;28mmap[39m(sanitize_sequence, args), [38;5;241m*[39m[38;5;241m*[39mkwargs)
+  [1;32m   1467[0m     bound [38;5;241m=[39m new_sig[38;5;241m.[39mbind(ax, [38;5;241m*[39margs, [38;5;241m*[39m[38;5;241m*[39mkwargs)
+  [1;32m   1468[0m     auto_label [38;5;241m=[39m (bound[38;5;241m.[39marguments[38;5;241m.[39mget(label_namer)
+  [1;32m   1469[0m                   [38;5;129;01mor[39;00m bound[38;5;241m.[39mkwargs[38;5;241m.[39mget(label_namer))
+
+  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/axes/_axes.py:5751[0m, in [0;36mAxes.imshow[0;34m(self, X, cmap, norm, aspect, interpolation, alpha, vmin, vmax, origin, extent, interpolation_stage, filternorm, filterrad, resample, url, **kwargs)[0m
+  [1;32m   5748[0m [38;5;28;01mif[39;00m aspect [38;5;129;01mis[39;00m [38;5;129;01mnot[39;00m [38;5;28;01mNone[39;00m:
+  [1;32m   5749[0m     [38;5;28mself[39m[38;5;241m.[39mset_aspect(aspect)
+  [0;32m-> 5751[0m im[38;5;241m.[39mset_data(X)
+  [1;32m   5752[0m im[38;5;241m.[39mset_alpha(alpha)
+  [1;32m   5753[0m [38;5;28;01mif[39;00m im[38;5;241m.[39mget_clip_path() [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m:
+  [1;32m   5754[0m     [38;5;66;03m# image does not already have clipping set, clip to axes patch[39;00m
+
+  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/image.py:723[0m, in [0;36m_ImageBase.set_data[0;34m(self, A)[0m
+  [1;32m    721[0m [38;5;28;01mif[39;00m [38;5;28misinstance[39m(A, PIL[38;5;241m.[39mImage[38;5;241m.[39mImage):
+  [1;32m    722[0m     A [38;5;241m=[39m pil_to_array(A)  [38;5;66;03m# Needed e.g. to apply png palette.[39;00m
+  [0;32m--> 723[0m [38;5;28mself[39m[38;5;241m.[39m_A [38;5;241m=[39m [38;5;28mself[39m[38;5;241m.[39m_normalize_image_array(A)
+  [1;32m    724[0m [38;5;28mself[39m[38;5;241m.[39m_imcache [38;5;241m=[39m [38;5;28;01mNone[39;00m
+  [1;32m    725[0m [38;5;28mself[39m[38;5;241m.[39mstale [38;5;241m=[39m [38;5;28;01mTrue[39;00m
+
+  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/image.py:693[0m, in [0;36m_ImageBase._normalize_image_array[0;34m(A)[0m
+  [1;32m    691[0m     A [38;5;241m=[39m A[38;5;241m.[39msqueeze([38;5;241m-[39m[38;5;241m1[39m)  [38;5;66;03m# If just (M, N, 1), assume scalar and apply colormap.[39;00m
+  [1;32m    692[0m [38;5;28;01mif[39;00m [38;5;129;01mnot[39;00m (A[38;5;241m.[39mndim [38;5;241m==[39m [38;5;241m2[39m [38;5;129;01mor[39;00m A[38;5;241m.[39mndim [38;5;241m==[39m [38;5;241m3[39m [38;5;129;01mand[39;00m A[38;5;241m.[39mshape[[38;5;241m-[39m[38;5;241m1[39m] [38;5;129;01min[39;00m [[38;5;241m3[39m, [38;5;241m4[39m]):
+  [0;32m--> 693[0m     [38;5;28;01mraise[39;00m [38;5;167;01mTypeError[39;00m([38;5;124mf[39m[38;5;124m"[39m[38;5;124mInvalid shape [39m[38;5;132;01m{[39;00mA[38;5;241m.[39mshape[38;5;132;01m}[39;00m[38;5;124m for image data[39m[38;5;124m"[39m)
+  [1;32m    694[0m [38;5;28;01mif[39;00m A[38;5;241m.[39mndim [38;5;241m==[39m [38;5;241m3[39m:
+  [1;32m    695[0m     [38;5;66;03m# If the input data has values outside the valid range (after[39;00m
+  [1;32m    696[0m     [38;5;66;03m# normalisation), we issue a warning and then clip X to the bounds[39;00m
+  [1;32m    697[0m     [38;5;66;03m# - otherwise casting wraps extreme values, hiding outliers and[39;00m
+  [1;32m    698[0m     [38;5;66;03m# making reliable interpretation impossible.[39;00m
+  [1;32m    699[0m     high [38;5;241m=[39m [38;5;241m255[39m [38;5;28;01mif[39;00m np[38;5;241m.[39missubdtype(A[38;5;241m.[39mdtype, np[38;5;241m.[39minteger) [38;5;28;01melse[39;00m [38;5;241m1[39m
+
+  [0;31mTypeError[0m: Invalid shape (10, 128, 128, 1) for image data
+#+end_example
+[[file:./.ob-jupyter/7374050d3fe3599adae3cd3169972512008ea652.png]]
 :END:
 :END:
 
