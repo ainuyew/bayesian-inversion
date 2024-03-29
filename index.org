@@ -421,26 +421,32 @@ Convert data into HDF5.
 
   import mayo
 
-  path='/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-  data = mayo.get_training_data(path)
-  n = (len(data) // 10) * 9
-  training_data = data[:n]
-  test_data = data[n:]
+  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path)
+  test_data = mayo.get_test_data(path)
 
-  #h5f.create_dataset('X_train', data=orig_data, compression="gzip", chunks=True, maxshape=(None,x))
+  #with h5py.File('.\mayo.h5', 'a') as hf:
+  with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'w') as hf:
+    train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
+    test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
 
-  with h5py.File('.\mayo.h5', 'a') as hf:
-    hf["train"].resize((hf["train"].shape[0] + training_data.shape[0]), axis = 0)
-    hf["train"][-training_data.shape[0]:] = training_data
+    #hf["train"].resize((hf["train"].shape[0] + training_data.shape[0]), axis = 0)
+    #hf["train"][-training_data.shape[0]:] = training_data
 
-    hf["test"].resize((hf["test"].shape[0] + test_data.shape[0]), axis = 0)
-    hf["test"][-test_data.shape[0]:] = test_data
+    #hf["test"].resize((hf["test"].shape[0] + test_data.shape[0]), axis = 0)
+    #hf["test"][-test_data.shape[0]:] = test_data
 
   print('done')
 #+end_src
 
 #+RESULTS:
-: loading patient data: 100% 10/10 [00:54<00:00,  5.40s/it]
+:RESULTS:
+: loading patient data: 100% 9/9 [00:19<00:00,  2.14s/it]
+:
+: loading patient data: 100% 1/1 [00:01<00:00,  1.93s/it]
+:
+: done
+:END:
 
 * DDPM
 DDPM specific parameters.
@@ -782,6 +788,7 @@ We sample images from the trained CEM model.
   import jax.numpy as jnp
   from tqdm import tqdm
   import numpy as np
+  import h5py
 
   import utils
   from unet import Unet
@@ -805,6 +812,7 @@ We sample images from the trained CEM model.
 
       inputs = jnp.concatenate((x_t, condition), axis=-1)
 
+
       f_theta = state.apply_fn(state.params, inputs, t * jnp.ones((n,)))
 
       # equation (40)
@@ -823,7 +831,6 @@ We sample images from the trained CEM model.
 
   key = random.PRNGKey(SEED)
   n_samples = 1000
-  samples = []
 
   # use the best params
   file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
@@ -833,12 +840,18 @@ We sample images from the trained CEM model.
   ts = utils.exponential_time_schedule(T, K)
   #path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
   path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-  training_data = mayo.get_training_data(path, 36, 37)
-  n = (len(training_data) // 10) * 9
-  test_data = training_data[n:]
 
-  fd_data, ld_data = training_data[0]
-  result = np.zeros(fd_data.shape)
+  with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'r') as hf:
+    test_data = hf['test'][36]
+  #training_data = mayo.get_training_data(path, 36, 37)
+  #n = (len(training_data) // 10) * 9
+  #test_data = training_data[n:]
+
+  fd_data, ld_data = test_data[0]
+
+  # create empty samples HDF5 to store samples
+  with h5py.File('/Users/huiyuanchua/Documents/data/cem_samples.hdf5', 'w') as hf:
+    samples = hf.create_dataset('samples', data=np.zeros((n_samples, 128, 128, 1)), compression='gzip', chunks=True)
 
   # define window parameters for abdominal scans
   # range from -125HU to 225HU centered around 50HU
@@ -847,7 +860,7 @@ We sample images from the trained CEM model.
   wd = lambda x : utils.window_image(x, ww, wl)
 
   # rescale [-125HU, 225HU] to [-1, 1]
-  ld_data_windowed = utils.window_image(ww, wl, out_range=(-1., 1.))
+  ld_data_windowed = utils.window_image(ld_data, ww, wl, out_range=(-1., 1.))
 
   for i in tqdm(range(n_samples // BATCH_SIZE)):
     # generate x_0 from noise
@@ -855,12 +868,15 @@ We sample images from the trained CEM model.
     x_0_tilde = sample(cem_state, ld_data_windowed, BATCH_SIZE, ts, subkey)
 
     # rescale in HU
-    x_0_tilde = x_0_tilde * (maxval - minval)/2 + midval
+    x_0_tilde = x_0_tilde * ww/2 + wl
 
-    samples.append(x_0_tilde)
+    with h5py.File('/Users/huiyuanchua/Documents/data/cem_samples.hdf5', 'a') as hf:
+      hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
 
-  sample_mean = np.mean(samples, axis=0)
-  sample_variance = np.var(samples, axis=0)
+  with h5py.File('/Users/huiyuanchua/Documents/data/cem_samples.hdf5', 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
 
   # plot the data
   imkwargs = dict(vmin=-0.2, vmax=0.2)
@@ -873,7 +889,8 @@ We sample images from the trained CEM model.
   _ = axs[1, 0].set_title("CEM mean")
   _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
   _ = axs[1, 1].set_title("CEM variance")
-  _ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(wd(sample_variance))
 
   plt.show()
 #+end_src
@@ -881,64 +898,28 @@ We sample images from the trained CEM model.
 #+RESULTS:
 :RESULTS:
 : Platform 'METAL' is experimental and not all JAX functionality may be correctly supported!
-: 2024-03-28 18:25:02.399715: W pjrt_plugin/src/mps_client.cc:563] WARNING: JAX Apple GPU support is experimental and not all JAX functionality is correctly supported!
+: 2024-03-29 16:08:19.095068: W pjrt_plugin/src/mps_client.cc:563] WARNING: JAX Apple GPU support is experimental and not all JAX functionality is correctly supported!
 : Metal device set to: Apple M1
-: using parameters from epoch 59 with loss 0.00021
-: loading patient data: 100% 10/10 [00:00<00:00, 61.59it/s]
+: using parameters from epoch 68 with loss 0.00039
+: loading patient data: 100% 10/10 [00:00<00:00, 58.49it/s]
 :
-: 100% 10/10 [3:13:29<00:00, 1161.00s/it]
-:
-# [goto error]
-#+begin_example
-  [0;31m---------------------------------------------------------------------------[0m
-  [0;31mTypeError[0m                                 Traceback (most recent call last)
-  Cell [0;32mIn[3], line 97[0m
-  [1;32m     95[0m _ [38;5;241m=[39m axs[[38;5;241m0[39m, [38;5;241m1[39m][38;5;241m.[39mimshow(wd(ld_data), cmap[38;5;241m=[39mplt[38;5;241m.[39mcm[38;5;241m.[39mGreys_r)
-  [1;32m     96[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m0[39m][38;5;241m.[39mset_title([38;5;124m"[39m[38;5;124mCEM mean[39m[38;5;124m"[39m)
-  [0;32m---> 97[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m0[39m][38;5;241m.[39mimshow(wd(sample_mean), cmap[38;5;241m=[39mplt[38;5;241m.[39mcm[38;5;241m.[39mGreys_r)
-  [1;32m     98[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m1[39m][38;5;241m.[39mset_title([38;5;124m"[39m[38;5;124mCEM variance[39m[38;5;124m"[39m)
-  [1;32m     99[0m _ [38;5;241m=[39m axs[[38;5;241m1[39m, [38;5;241m1[39m][38;5;241m.[39mimshow(wd(sample_variance), [38;5;241m*[39m[38;5;241m*[39mimkwargs)
-
-  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/__init__.py:1465[0m, in [0;36m_preprocess_data.<locals>.inner[0;34m(ax, data, *args, **kwargs)[0m
-  [1;32m   1462[0m [38;5;129m@functools[39m[38;5;241m.[39mwraps(func)
-  [1;32m   1463[0m [38;5;28;01mdef[39;00m [38;5;21minner[39m(ax, [38;5;241m*[39margs, data[38;5;241m=[39m[38;5;28;01mNone[39;00m, [38;5;241m*[39m[38;5;241m*[39mkwargs):
-  [1;32m   1464[0m     [38;5;28;01mif[39;00m data [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m:
-  [0;32m-> 1465[0m         [38;5;28;01mreturn[39;00m func(ax, [38;5;241m*[39m[38;5;28mmap[39m(sanitize_sequence, args), [38;5;241m*[39m[38;5;241m*[39mkwargs)
-  [1;32m   1467[0m     bound [38;5;241m=[39m new_sig[38;5;241m.[39mbind(ax, [38;5;241m*[39margs, [38;5;241m*[39m[38;5;241m*[39mkwargs)
-  [1;32m   1468[0m     auto_label [38;5;241m=[39m (bound[38;5;241m.[39marguments[38;5;241m.[39mget(label_namer)
-  [1;32m   1469[0m                   [38;5;129;01mor[39;00m bound[38;5;241m.[39mkwargs[38;5;241m.[39mget(label_namer))
-
-  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/axes/_axes.py:5751[0m, in [0;36mAxes.imshow[0;34m(self, X, cmap, norm, aspect, interpolation, alpha, vmin, vmax, origin, extent, interpolation_stage, filternorm, filterrad, resample, url, **kwargs)[0m
-  [1;32m   5748[0m [38;5;28;01mif[39;00m aspect [38;5;129;01mis[39;00m [38;5;129;01mnot[39;00m [38;5;28;01mNone[39;00m:
-  [1;32m   5749[0m     [38;5;28mself[39m[38;5;241m.[39mset_aspect(aspect)
-  [0;32m-> 5751[0m im[38;5;241m.[39mset_data(X)
-  [1;32m   5752[0m im[38;5;241m.[39mset_alpha(alpha)
-  [1;32m   5753[0m [38;5;28;01mif[39;00m im[38;5;241m.[39mget_clip_path() [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m:
-  [1;32m   5754[0m     [38;5;66;03m# image does not already have clipping set, clip to axes patch[39;00m
-
-  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/image.py:723[0m, in [0;36m_ImageBase.set_data[0;34m(self, A)[0m
-  [1;32m    721[0m [38;5;28;01mif[39;00m [38;5;28misinstance[39m(A, PIL[38;5;241m.[39mImage[38;5;241m.[39mImage):
-  [1;32m    722[0m     A [38;5;241m=[39m pil_to_array(A)  [38;5;66;03m# Needed e.g. to apply png palette.[39;00m
-  [0;32m--> 723[0m [38;5;28mself[39m[38;5;241m.[39m_A [38;5;241m=[39m [38;5;28mself[39m[38;5;241m.[39m_normalize_image_array(A)
-  [1;32m    724[0m [38;5;28mself[39m[38;5;241m.[39m_imcache [38;5;241m=[39m [38;5;28;01mNone[39;00m
-  [1;32m    725[0m [38;5;28mself[39m[38;5;241m.[39mstale [38;5;241m=[39m [38;5;28;01mTrue[39;00m
-
-  File [0;32m~/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/matplotlib/image.py:693[0m, in [0;36m_ImageBase._normalize_image_array[0;34m(A)[0m
-  [1;32m    691[0m     A [38;5;241m=[39m A[38;5;241m.[39msqueeze([38;5;241m-[39m[38;5;241m1[39m)  [38;5;66;03m# If just (M, N, 1), assume scalar and apply colormap.[39;00m
-  [1;32m    692[0m [38;5;28;01mif[39;00m [38;5;129;01mnot[39;00m (A[38;5;241m.[39mndim [38;5;241m==[39m [38;5;241m2[39m [38;5;129;01mor[39;00m A[38;5;241m.[39mndim [38;5;241m==[39m [38;5;241m3[39m [38;5;129;01mand[39;00m A[38;5;241m.[39mshape[[38;5;241m-[39m[38;5;241m1[39m] [38;5;129;01min[39;00m [[38;5;241m3[39m, [38;5;241m4[39m]):
-  [0;32m--> 693[0m     [38;5;28;01mraise[39;00m [38;5;167;01mTypeError[39;00m([38;5;124mf[39m[38;5;124m"[39m[38;5;124mInvalid shape [39m[38;5;132;01m{[39;00mA[38;5;241m.[39mshape[38;5;132;01m}[39;00m[38;5;124m for image data[39m[38;5;124m"[39m)
-  [1;32m    694[0m [38;5;28;01mif[39;00m A[38;5;241m.[39mndim [38;5;241m==[39m [38;5;241m3[39m:
-  [1;32m    695[0m     [38;5;66;03m# If the input data has values outside the valid range (after[39;00m
-  [1;32m    696[0m     [38;5;66;03m# normalisation), we issue a warning and then clip X to the bounds[39;00m
-  [1;32m    697[0m     [38;5;66;03m# - otherwise casting wraps extreme values, hiding outliers and[39;00m
-  [1;32m    698[0m     [38;5;66;03m# making reliable interpretation impossible.[39;00m
-  [1;32m    699[0m     high [38;5;241m=[39m [38;5;241m255[39m [38;5;28;01mif[39;00m np[38;5;241m.[39missubdtype(A[38;5;241m.[39mdtype, np[38;5;241m.[39minteger) [38;5;28;01melse[39;00m [38;5;241m1[39m
-
-  [0;31mTypeError[0m: Invalid shape (10, 128, 128, 1) for image data
-#+end_example
-[[file:./.ob-jupyter/7374050d3fe3599adae3cd3169972512008ea652.png]]
+:  17% 17/100 [5:28:27<26:45:03, 1160.28s/it]
 :END:
 :END:
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import utils
+  import h5py
+  with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'r') as hf:
+      images = [utils.window_image(img[0], 350, 50) for img in hf['test'][36:52]]
+
+  utils.show_img_grid(images)
+
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/8f6594d4311b23397a4a2e373ea01d76ceb19063.png]]
 
 * Reads
 - Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html

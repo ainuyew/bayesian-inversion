@@ -40,13 +40,13 @@ def get_pixel_arrays(file_paths):
 
     return pixel_arrays
 
-def get_training_data(folder, slice_start=0, slice_end=-1):
+def get_data(folder, patients, slice_start=0, slice_end=-1):
     fd_data = []
     ld_data = []
     fd_path=f'{folder}/full_3mm'
     ld_path=f'{folder}/quarter_3mm'
 
-    patients=sorted([p for p in os.listdir(fd_path) if not p.startswith('.')])
+    #patients=sorted([p for p in os.listdir(fd_path) if not p.startswith('.')])
 
     for patient in tqdm.tqdm(patients, f'loading patient data'):
         fd_file_paths = sorted(list(Path(f'{fd_path}/{patient}').rglob('*.IMA')))[slice_start:slice_end]
@@ -59,6 +59,20 @@ def get_training_data(folder, slice_start=0, slice_end=-1):
         ld_data[0:0] = ld_pixel_arrays
 
     return np.array(list(zip(fd_data, ld_data)))
+
+def get_training_data(folder, slice_start=0, slice_end=-1):
+    fd_path=f'{folder}/full_3mm'
+    patients=sorted([p for p in os.listdir(fd_path) if not p.startswith('.')])
+    n = len(patients)//10 * 9
+    return get_data(folder, patients[:n], slice_start, slice_end)
+
+def get_test_data(folder, slice_start=0, slice_end=-1):
+    fd_path=f'{folder}/full_3mm'
+    patients=sorted([p for p in os.listdir(fd_path) if not p.startswith('.')])
+    n = len(patients)//10
+
+    return get_data(folder, patients[-n:], slice_start, slice_end)
+
 
 def main():
     #path='/Volumes/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
