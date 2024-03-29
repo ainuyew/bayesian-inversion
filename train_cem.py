@@ -76,6 +76,15 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
             step = step+1
             loss_log.append((epoch, step, loss))
 
+            del loss
+            del grads
+            del training_inputs
+            del training_targets
+            del x_k_fd
+            del x_0_fd
+            del x_0_ld
+            del x_0_batch
+
             #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
             utils.save_loss_log(loss_log, LOSS_LOG)
 

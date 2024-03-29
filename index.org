@@ -60,7 +60,9 @@ description as a private header tag "WaterAttenuationCoefficient" (see https://w
 ** 2024-03-29
 - preprocessing CT scans https://zapaishchykova.medium.com/preprocessing-ct-in-python-2a7e8170ac9f
 - open source software to read CT scans https://www.slicer.org
-- summart on windowing CT scans https://kevalnagda.github.io/ct-windowing
+- summary on windowing CT scans https://kevalnagda.github.io/ct-windowing
+*** TODO to investigate out of memory issues when working with larger images 512x512
+*** TODO store samples in files (instead of in memory) to calculate mean and variance. HDF5 format https://www.pytables.org/FAQ.html or https://docs.h5py.org/en/stable/#:~:text=HDF5%20lets%20you%20store%20huge,and%20tagged%20however%20you%20want. we cannot load everything into memory.
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -411,6 +413,34 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
   [0;31mAttributeError[0m: module 'dask.array.numpy_compat' has no attribute 'take_along_axis'
 #+end_example
 :END:
+
+Convert data into HDF5.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+
+  import mayo
+
+  path='/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  data = mayo.get_training_data(path)
+  n = (len(data) // 10) * 9
+  training_data = data[:n]
+  test_data = data[n:]
+
+  #h5f.create_dataset('X_train', data=orig_data, compression="gzip", chunks=True, maxshape=(None,x))
+
+  with h5py.File('.\mayo.h5', 'a') as hf:
+    hf["train"].resize((hf["train"].shape[0] + training_data.shape[0]), axis = 0)
+    hf["train"][-training_data.shape[0]:] = training_data
+
+    hf["test"].resize((hf["test"].shape[0] + test_data.shape[0]), axis = 0)
+    hf["test"][-test_data.shape[0]:] = test_data
+
+  print('done')
+#+end_src
+
+#+RESULTS:
+: loading patient data: 100% 10/10 [00:54<00:00,  5.40s/it]
 
 * DDPM
 DDPM specific parameters.
@@ -792,7 +822,7 @@ We sample images from the trained CEM model.
     return x_t
 
   key = random.PRNGKey(SEED)
-  n_samples = 100
+  n_samples = 1000
   samples = []
 
   # use the best params
@@ -812,13 +842,12 @@ We sample images from the trained CEM model.
 
   # define window parameters for abdominal scans
   # range from -125HU to 225HU centered around 50HU
-  minval = -125
-  maxval = 225
-  midval = (maxval - minval)/2 + minval # 50 HU
-  wd = lambda x : utils.window_image(x, minval, maxval)
+  ww = 350
+  wl = 50
+  wd = lambda x : utils.window_image(x, ww, wl)
 
   # rescale [-125HU, 225HU] to [-1, 1]
-  ld_data_windowed = (np.clip(ld_data, minval, maxval) - midval)/((maxval - minval)/2)
+  ld_data_windowed = utils.window_image(ww, wl, out_range=(-1., 1.))
 
   for i in tqdm(range(n_samples // BATCH_SIZE)):
     # generate x_0 from noise
