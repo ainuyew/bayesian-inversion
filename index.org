@@ -414,6 +414,34 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
 #+end_example
 :END:
 
+Convert data into HDF5.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+
+  import mayo
+
+  path='/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  data = mayo.get_training_data(path)
+  n = (len(data) // 10) * 9
+  training_data = data[:n]
+  test_data = data[n:]
+
+  #h5f.create_dataset('X_train', data=orig_data, compression="gzip", chunks=True, maxshape=(None,x))
+
+  with h5py.File('.\mayo.h5', 'a') as hf:
+    hf["train"].resize((hf["train"].shape[0] + training_data.shape[0]), axis = 0)
+    hf["train"][-training_data.shape[0]:] = training_data
+
+    hf["test"].resize((hf["test"].shape[0] + test_data.shape[0]), axis = 0)
+    hf["test"][-test_data.shape[0]:] = test_data
+
+  print('done')
+#+end_src
+
+#+RESULTS:
+: loading patient data: 100% 10/10 [00:54<00:00,  5.40s/it]
+
 * DDPM
 DDPM specific parameters.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
