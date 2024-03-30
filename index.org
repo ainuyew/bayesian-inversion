@@ -61,8 +61,12 @@ description as a private header tag "WaterAttenuationCoefficient" (see https://w
 - preprocessing CT scans https://zapaishchykova.medium.com/preprocessing-ct-in-python-2a7e8170ac9f
 - open source software to read CT scans https://www.slicer.org
 - summary on windowing CT scans https://kevalnagda.github.io/ct-windowing
-*** TODO to investigate out of memory issues when working with larger images 512x512
-*** TODO store samples in files (instead of in memory) to calculate mean and variance. HDF5 format https://www.pytables.org/FAQ.html or https://docs.h5py.org/en/stable/#:~:text=HDF5%20lets%20you%20store%20huge,and%20tagged%20however%20you%20want. we cannot load everything into memory.
+*** DONE to investigate out of memory issues when working with larger images 512x512
+*** DONE store samples in files (instead of in memory) to calculate mean and variance. HDF5 format https://www.pytables.org/FAQ.html or https://docs.h5py.org/en/stable/#:~:text=HDF5%20lets%20you%20store%20huge,and%20tagged%20however%20you%20want. we cannot load everything into memory.
+** 2024-03-30
+- Running CEM sampling on server for 1000 samples. This is based on 128x128 training data and conditioned on 36th image frame where the lesion was identified. Samples are recorded in HDF5. From which, we can calculate the mean/variance.
+- Rewrote the CEM/DDPM training code to run on 512x512 training data. The training data will be loaded into memory (when needed) from HDF5 files instead of the entire data into memory. CEM training code ran for 2 epochs on M1 without out of memory errors. Will test on server when CEM sampling is done. Better resolution is expected from 512x512 data.
+- Wrote code to generate CEM samples outside of org (jupyter construct). This code will be executed on server instead. Yet to be tested.
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -414,19 +418,26 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
 #+end_example
 :END:
 
-Convert data into HDF5.
+We preprocess the data to 512x512x1 and window to a range of 350 HU and centered about 50 HU. Importantly, the data is saved in HDF5 format. This allows us to not load the entire training or test data into memory and use the data in a similar fashion to numpy arrays.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import h5py
+  from pathlib import Path
 
   import mayo
-
-  path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
   training_data = mayo.get_training_data(path)
   test_data = mayo.get_test_data(path)
 
-  #with h5py.File('.\mayo.h5', 'a') as hf:
-  with h5py.File('/home/gpu_user1/Documents/data/mayo.hdf5', 'w') as hf:
+  # rescale by abdominal window
+  ww = 350 # range
+  wl = 50 # center
+
+  training_data = utils.window_image(training_data, ww, wl, out_range=(-1., 1.))
+  test_data= utils.window_image(test_data, ww, wl, out_range=(-1., 1.))
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'w') as hf:
+
     train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
     test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
 
@@ -439,10 +450,6 @@ Convert data into HDF5.
   print('done')
 #+end_src
 
-#+RESULTS:
-: loading patient data: 100% 9/9 [00:25<00:00,  2.87s/it]
-: loading patient data: 100% 1/1 [00:01<00:00,  1.95s/it]
-: done
 
 * DDPM
 DDPM specific parameters.
@@ -467,13 +474,14 @@ First, let's make sure we have the correct shapes for training data inputs and p
     from jax import random
     import jax.numpy as jnp
     import numpy as np
+    from pathlib import Path
 
     import utils
     import mayo
 
     key = random.PRNGKey(42)
     state = utils.create_training_state(key=key)
-    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
     training_data = mayo.get_training_data(path, 112, 113)
 
     x_0_fd = training_data[:, 0]
@@ -578,8 +586,7 @@ We sample images from the trained DDPM model.
   print(f'using parameters from epoch {epoch} with loss {loss}')
 
   betas = jnp.linspace(MIN_BETA, MAX_BETA, K)
-
-  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
   training_data = mayo.get_training_data(path, 112, 113)
   n = (len(training_data) // 10) * 9
   test_data = training_data[n:]
@@ -731,6 +738,39 @@ We sample images from the trained DDPM model.
 [[file:./.ob-jupyter/da8b230284e5503497e7e30a76f4e73bb3cc5842.png]]
 :END:
 
+We show the results from samples generated externally.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  from pathlib import Path
+  import matplotlib.pyplot as plt
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    fd_data, ld_data = hf['test'][36]
+
+  with h5py.File(f'{Path.home()}/Documents/data/ddpm_samples.hdf5', 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
+
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.normalize_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.normalize_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(utils.normalize_to_greyscale(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
+
+  plt.show()
+#+end_src
+
+
 * CEM
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -778,19 +818,21 @@ Training is performed via a python script [[file:train_cem.py]]. We examine the 
 We sample images from the trained CEM model.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-    import matplotlib.pyplot as plt
-    import optax
-    from jax import random
-    import jax.numpy as jnp
-    from tqdm import tqdm
-    import numpy as np
-    import h5py
+  import matplotlib.pyplot as plt
+  import optax
+  from jax import random
+  import jax.numpy as jnp
+  from tqdm import tqdm
+  import numpy as np
+  import h5py
+  from pathlib import Path
 
-    import utils
-    from unet import Unet
-    import mayo
 
-    def sample(state, condition, n, ts, key):
+  import utils
+  from unet import Unet
+  import mayo
+
+  def sample(state, condition, n, ts, key):
       # random white noise X_T
       key, subkey = random.split(key)
       x_t = random.normal(subkey, shape=(n, condition.shape[0], condition.shape[1], 1))
@@ -832,64 +874,50 @@ We sample images from the trained CEM model.
     file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
     cem_state = utils.create_training_state(params_file=file_path)
     print(f'using parameters from epoch {epoch} with loss {loss}')
-
     ts = utils.exponential_time_schedule(T, K)
-    #path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
 
-    with h5py.File('/home/gpu_user1/Documents/data/mayo.hdf5', 'r') as hf:
-      test_data = hf['test'][36]
-    #training_data = mayo.get_training_data(path, 36, 37)
-    #n = (len(training_data) // 10) * 9
-    #test_data = training_data[n:]
-
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    test_data = hf['test'][36]
     fd_data, ld_data = test_data
 
-    samples_path = '/home/gpu_user1/Documents/data/cem_samples.hdf5'
-    # create empty samples HDF5 to store samples
-    with h5py.File(samples_path, 'w') as hf:
-      samples = hf.create_dataset('samples', data=np.zeros((n_samples, 128, 128, 1)), compression='gzip', chunks=True)
+  # create empty samples HDF5 to store samples
+  samples_path = f'{Path.home()}/Documents/data/cem_samples.hdf5'
+  with h5py.File(samples_path, 'w') as hf:
+    samples = hf.create_dataset('samples', data=np.zeros((n_samples, 512, 512, 1)), compression='gzip', chunks=True)
 
-    # define window parameters for abdominal scans
-    # range from -125HU to 225HU centered around 50HU
-    ww = 350
-    wl = 50
-    wd = lambda x : utils.window_image(x, ww, wl)
+  for i in tqdm(range(n_samples // BATCH_SIZE)):
+    # generate x_0 from noise
+    key, subkey = random.split(key)
+    x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
 
-    # rescale [-125HU, 225HU] to [-1, 1]
-    ld_data_windowed = utils.window_image(ld_data, ww, wl, out_range=(-1., 1.))
+    # rescale in HU
+    x_0_tilde = x_0_tilde * ww/2 + wl
 
-    for i in tqdm(range(n_samples // BATCH_SIZE)):
-      # generate x_0 from noise
-      key, subkey = random.split(key)
-      x_0_tilde = sample(cem_state, ld_data_windowed, BATCH_SIZE, ts, subkey)
+    with h5py.File(samples_path, 'a') as hf:
+      hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
 
-      # rescale in HU
-      x_0_tilde = x_0_tilde * ww/2 + wl
+  with h5py.File(samples_path, 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
 
-      with h5py.File(samples_path, 'a') as hf:
-        hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.normalize_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.normalize_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(utils.normalize_to_greyscale(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
 
-    with h5py.File(samples_path, 'r') as hf:
-      samples = hf['samples']
-      sample_mean = np.mean(samples, axis=0)
-      sample_variance = np.var(samples, axis=0)
 
-    # plot the data
-    imkwargs = dict(vmin=-0.2, vmax=0.2)
-    fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
-    _ = fig.tight_layout()
-    _ = axs[0, 0].set_title("full dose image")
-    _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
-    _ = axs[0, 1].set_title("quarter dose image")
-    _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
-    _ = axs[1, 0].set_title("CEM mean")
-    _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
-    _ = axs[1, 1].set_title("CEM variance")
-    #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-    _ = axs[1, 1].imshow(wd(sample_variance))
-
-    plt.show()
+  plt.show()
 #+end_src
 
 #+RESULTS:
@@ -923,11 +951,43 @@ We sample images from the trained CEM model.
 
 #+RESULTS:
 
+We show the results from samples generated externally.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  from pathlib import Path
+  import matplotlib.pyplot as plt
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    fd_data, ld_data = hf['test'][36]
+
+  with h5py.File(f'{Path.home()}/Documents/data/cem_samples.hdf5', 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
+
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.normalize_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.normalize_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(utils.normalize_to_greyscale(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
+
+  plt.show()
+#+end_src
+
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import utils
   import h5py
-  with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'r') as hf:
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
       images = [utils.window_image(img[0], 350, 50) for img in hf['test'][36:52]]
 
   utils.show_img_grid(images)

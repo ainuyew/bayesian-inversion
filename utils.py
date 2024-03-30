@@ -73,7 +73,7 @@ def save_loss_log(loss_log, file_path):
         np.save(f, loss_log)
     return loss_log
 
-def create_training_state(params_file=None, key=None):
+def create_training_state(params_file=None, key=None, param_shape=(1, 512, 512, 2)):
     if key is None:
         key = random.PRNGKey(42)
 
@@ -88,7 +88,7 @@ def create_training_state(params_file=None, key=None):
    # optimizer = optax.adam(learning_rate=1e-4, b1=.9, b2=.99, eps=1e-8)
     optimizer = optax.adam(learning_rate=2e-5)
 
-    params = neural_network.init(subkey, jnp.ones([1, 512, 512, 2]), jnp.ones((1,)))
+    params = neural_network.init(subkey, jnp.ones(param_shape), jnp.ones((1,)))
     if params_file:
         params = load_pytree(params, params_file)
 
