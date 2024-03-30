@@ -425,7 +425,6 @@ Convert data into HDF5.
   training_data = mayo.get_training_data(path)
   test_data = mayo.get_test_data(path)
 
-  #with h5py.File('.\mayo.h5', 'a') as hf:
   with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'w') as hf:
     train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
     test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
@@ -441,9 +440,9 @@ Convert data into HDF5.
 
 #+RESULTS:
 :RESULTS:
-: loading patient data: 100% 9/9 [00:19<00:00,  2.14s/it]
+: loading patient data: 100% 9/9 [00:05<00:00,  1.58it/s]
 :
-: loading patient data: 100% 1/1 [00:01<00:00,  1.93s/it]
+: loading patient data: 100% 1/1 [00:00<00:00,  1.81it/s]
 :
 : done
 :END:

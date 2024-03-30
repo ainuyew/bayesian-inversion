@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import os
 import time
+import h5py
 
 import unet
 import utils
@@ -36,7 +37,6 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
 
     n_batch=training_data.shape[0] // batch_size
 
-    loss_log = None
     best_loss = 1.
     predict_fn = state.apply_fn
     n_stale_epoch=1
@@ -53,10 +53,16 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
         for perm in tqdm(perms, desc=f'epoch {epoch}'):
 
             # randomly pick a subset of the entire sample size
-            x_0_batch = training_data[perm, ...]
+            x_0_batch = training_data[sorted(perm), ...]
 
             x_0_fd = x_0_batch[:, 0]
             x_0_ld = x_0_batch[:, 1]
+
+            # rescale by abdominal window
+            ww = 350 # range
+            wl = 50 # center
+            x_0_fd = utils.window_image(x_0_fd, ww, wl, out_range=(-1., 1.))
+            x_0_ld = utils.window_image(x_0_ld, ww, wl, out_range=(-1., 1.))
 
             # regenerate a new random keys
             key, key2, key3 = random.split(key, 3)
@@ -74,6 +80,7 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
             state = state.apply_gradients(grads=grads)
 
             step = step+1
+
             loss_log.append((epoch, step, loss))
 
             del loss
@@ -85,8 +92,8 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
             del x_0_ld
             del x_0_batch
 
-            #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
-            utils.save_loss_log(loss_log, LOSS_LOG)
+        #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
+        utils.save_loss_log(loss_log, LOSS_LOG)
 
         epoch_loss = np.mean([loss for _, _, loss in loss_log])
 
@@ -107,7 +114,7 @@ if __name__ == '__main__':
     CHECKPOINT_DIR=os.path.abspath('/tmp/cem')
     LOSS_LOG= f'{PROJECT_DIR}/cem_loss_log.npy'
     SEED=42
-    BATCH_SIZE=5
+    BATCH_SIZE=1
     N_EPOCH=100
     T = 10.
     K = 200
@@ -127,20 +134,13 @@ if __name__ == '__main__':
         state = utils.create_training_state(key=key2)
         #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    path=os.path.abspath('data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30')
-    training_data = mayo.get_training_data(path)
-    n = (len(training_data) // 10) * 9
-    training_data = training_data[:n] # use data from first 9 patients for training
+    with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'r') as hf:
+        training_data = hf['train']
 
-    # rescale by abdominal window
-    ww = 350 # range
-    wl = 50 # center
-    training_data = utils.window_image(training_data, ww, wl, out_range=(-1., 1.))
+        time_schedule = utils.exponential_time_schedule(T, K)[1:] # ignore 0.0
 
-    time_schedule = utils.exponential_time_schedule(T, K)[1:] # ignore 0.0
-
-    start = time.time()
-    state = fit(state, training_data, time_schedule, key3, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
-    end = time.time()
+        start = time.time()
+        state = fit(state, training_data, time_schedule, key3, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
+        end = time.time()
 
     print(f'elapsed: {end - start}s')

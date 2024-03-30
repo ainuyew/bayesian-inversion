@@ -34,7 +34,7 @@ def get_pixel_arrays(file_paths):
         hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
 
         # resize image to run with smaller ram/vram
-        hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
+        #hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
 
         pixel_arrays.append(hu_values.reshape((hu_values.shape[0], hu_values.shape[1], 1)))
 
