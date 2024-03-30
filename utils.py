@@ -174,7 +174,7 @@ def window_image(x: np.ndarray, ww: int, wl: int, out_range=(0., 255.)) -> np.nd
     upper = lower + ww
     clipped = np.clip(x, lower, upper)
     out_lower, out_upper = out_range
-    return (clipped - lower)/ww * (out_upper - out_lower) - out_lower
+    return (clipped - lower)/ww * (out_upper - out_lower) + out_lower
 
 def signal_to_noise_ratio(x, axis=0, ddof=0):
     x = np.asanyarray(x)
