@@ -964,31 +964,38 @@ We show the results from samples generated externally.
   import h5py
   from pathlib import Path
   import matplotlib.pyplot as plt
+  import numpy as np
+
+  import utils
 
   with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
     fd_data, ld_data = hf['test'][36]
 
-  with h5py.File(f'{Path.home()}/Documents/data/cem_samples.hdf5', 'r') as hf:
+  with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
     samples = hf['samples']
     sample_mean = np.mean(samples, axis=0)
     sample_variance = np.var(samples, axis=0)
 
   # plot the data
   imkwargs = dict(vmin=-0.2, vmax=0.2)
-  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  #fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5))
   _ = fig.tight_layout()
   _ = axs[0, 0].set_title("full dose image")
-  _ = axs[0, 0].imshow(utils.normalize_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 0].imshow(utils.window_image(fd_data, 350, 50), cmap=plt.cm.Greys_r)
   _ = axs[0, 1].set_title("quarter dose image")
-  _ = axs[0, 1].imshow(utils.normalize_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].imshow(utils.window_image(ld_data, 350, 50), cmap=plt.cm.Greys_r)
   _ = axs[1, 0].set_title("CEM mean")
-  _ = axs[1, 0].imshow(utils.normalize_to_greyscale(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].imshow(utils.window_image(sample_mean, 350, 50), cmap=plt.cm.Greys_r)
   _ = axs[1, 1].set_title("CEM variance")
   #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
+  _ = axs[1, 1].imshow(utils.window_image(sample_variance, 350, 50))
 
   plt.show()
 #+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/2b1fc5abf5912a361a8667e5d9752bb60caa18b1.png]]
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -1002,7 +1009,22 @@ We show the results from samples generated externally.
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/8f6594d4311b23397a4a2e373ea01d76ceb19063.png]]
+[[file:./.ob-jupyter/dfdfca26a5c897f080d498c05985418c8accda5f.png]]
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import utils
+  import h5py
+  with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
+        images = [utils.window_image(img, 350, 50) for img in hf['samples'][:64]]
+
+  utils.show_img_grid(images)
+
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/140575da8544742fc06c6de23df6f131b8712527.png]]
+
 
 * Reads
 - Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html

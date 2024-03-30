@@ -71,7 +71,7 @@ def main(n_samples=1000):
         x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
 
         # rescale from (-1., 1.) to HU
-        x_0_tilde = x_0_tilde * ww/2 + wl
+        #x_0_tilde = x_0_tilde * ww/2 + wl
 
         with h5py.File(samples_path, 'a') as hf:
             hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
