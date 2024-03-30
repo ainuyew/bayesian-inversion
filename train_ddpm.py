@@ -4,6 +4,8 @@ import numpy as np
 from tqdm import tqdm
 import os
 import time
+import pathlib import Path
+import h5py
 
 import unet
 import utils
@@ -44,7 +46,7 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
       for perm in tqdm(perms, desc=f'epoch {epoch}'):
 
           # randomly pick a subset of the entire sample size
-          x_0_batch = training_data[perm, ...]
+          x_0_batch = training_data[sorted(perm), ...]
 
           # regenerate a new random keys
           key, key2, key3 = random.split(key, 3)
@@ -66,6 +68,14 @@ def fit(state, training_data, key, ks, alpha_bars, batch_size, n_epoch, patience
 
           step = step+1
           loss_log.append((epoch, step, loss))
+
+          del loss
+          del grads
+          del x_k
+          del x_k_fd
+          del x_0_fd
+          del x_0_ld
+          del x_0_batch
 
       #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch, step)
       utils.save_loss_log(loss_log, LOSS_LOG)
@@ -100,24 +110,23 @@ def main():
         state = utils.create_training_state(key=key2)
         #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
-    path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-    training_data = mayo.get_training_data(path)
-    n = (len(training_data) // 10) * 9
-    training_data = training_data[:n] # use data from first 9 patients for training
-
     # rescale by z-score
     mu = np.mean(training_data)
     sigma = np.std(training_data)
     training_data = (training_data - mu)/sigma
 
-    betas = jnp.linspace(MIN_BETA, MAX_BETA, K, dtype=jnp.float32) # noise variance
+    betas = np.linspace(MIN_BETA, MAX_BETA, K, dtype=np.float32) # noise variance
     alphas = 1- betas
-    alpha_bars = jnp.cumprod(alphas)
-    ks = jnp.array(range(len(betas))) # noise variance indexes
+    alpha_bars = np.cumprod(alphas)
+    ks = np.array(range(len(betas))) # noise variance indexes
 
-    start = time.time()
-    state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
-    end = time.time()
+    with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+        training_data = hf['train']
+
+        start = time.time()
+        state = fit(state, training_data, key3, ks, alpha_bars, BATCH_SIZE, N_EPOCH, PATIENCE, step=step+1, epoch_start=epoch_start+1)
+        end = time.time()
+
     print(f'elapsed: {end - start}s')
 
 PROJECT_DIR=os.path.abspath('.')
