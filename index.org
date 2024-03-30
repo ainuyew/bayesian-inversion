@@ -317,100 +317,100 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
 :RESULTS:
 # [goto error]
 #+begin_example
-  [0;31m[0m
-  [0;31mImportError[0mTraceback (most recent call last)
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m     14[0m [0;32mtry[0m[0;34m:[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m---> 15[0;31m     [0;32mfrom[0m [0mnumpy[0m [0;32mimport[0m [0mtake_along_axis[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     16[0m [0;32mexcept[0m [0mImportError[0m[0;34m:[0m  [0;31m# pragma: no cover[0m[0;34m[0m[0;34m[0m[0m
+  
+  ImportErrorTraceback (most recent call last)
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
+       14 try:
+  ---> 15     from numpy import take_along_axis
+       16 except ImportError:  # pragma: no cover
 
-  [0;31mImportError[0m: cannot import name 'take_along_axis'
+  ImportError: cannot import name 'take_along_axis'
 
   During handling of the above exception, another exception occurred:
 
-  [0;31mAttributeError[0mTraceback (most recent call last)
-  [0;32m<ipython-input-1-c46f9b485a61>[0m in [0;36m<module>[0;34m[0m
-  [1;32m      9[0m [0mdcm_fd_path[0m[0;34m=[0m[0;34mf'{dcm_path}/DICOM-CT-PD_FD'[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     10[0m [0;34m[0m[0m
-  [0;32m---> 11[0;31m [0;32mimport[0m [0modl[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     12[0m [0;32mfrom[0m [0modl[0m[0;34m.[0m[0mcontrib[0m[0;34m.[0m[0mdatasets[0m[0;34m.[0m[0mct[0m [0;32mimport[0m [0mmayo[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     13[0m [0;34m[0m[0m
+  AttributeErrorTraceback (most recent call last)
+  <ipython-input-1-c46f9b485a61> in <module>
+        9 dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
+       10 
+  ---> 11 import odl
+       12 from odl.contrib.datasets.ct import mayo
+       13 
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/__init__.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m     64[0m [0;32mfrom[0m [0;34m.[0m [0;32mimport[0m [0mphantom[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     65[0m [0;32mfrom[0m [0;34m.[0m [0;32mimport[0m [0msolvers[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m---> 66[0;31m [0;32mfrom[0m [0;34m.[0m [0;32mimport[0m [0mtomo[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     67[0m [0;32mfrom[0m [0;34m.[0m [0;32mimport[0m [0mtrafos[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     68[0m [0;32mfrom[0m [0;34m.[0m [0;32mimport[0m [0mufunc_ops[0m[0;34m[0m[0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/__init__.py in <module>
+       64 from . import phantom
+       65 from . import solvers
+  ---> 66 from . import tomo
+       67 from . import trafos
+       68 from . import ufunc_ops
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/__init__.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m     17[0m [0m__all__[0m [0;34m+=[0m [0mgeometry[0m[0;34m.[0m[0m__all__[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     18[0m [0;34m[0m[0m
-  [0;32m---> 19[0;31m [0;32mfrom[0m [0;34m.[0m[0mbackends[0m [0;32mimport[0m [0;34m*[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     20[0m [0m__all__[0m [0;34m+=[0m [0mbackends[0m[0;34m.[0m[0m__all__[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     21[0m [0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/__init__.py in <module>
+       17 __all__ += geometry.__all__
+       18 
+  ---> 19 from .backends import *
+       20 __all__ += backends.__all__
+       21 
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/__init__.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m     22[0m [0m__all__[0m [0;34m+=[0m [0mastra_cuda[0m[0;34m.[0m[0m__all__[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     23[0m [0;34m[0m[0m
-  [0;32m---> 24[0;31m [0;32mfrom[0m [0;34m.[0m[0mskimage_radon[0m [0;32mimport[0m [0;34m*[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     25[0m [0m__all__[0m [0;34m+=[0m [0mskimage_radon[0m[0;34m.[0m[0m__all__[0m[0;34m[0m[0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/__init__.py in <module>
+       22 __all__ += astra_cuda.__all__
+       23 
+  ---> 24 from .skimage_radon import *
+       25 __all__ += skimage_radon.__all__
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/skimage_radon.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m     12[0m [0;32mimport[0m [0mnumpy[0m [0;32mas[0m [0mnp[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     13[0m [0;32mtry[0m[0;34m:[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m---> 14[0;31m     [0;32mimport[0m [0mskimage[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     15[0m     [0mSKIMAGE_AVAILABLE[0m [0;34m=[0m [0;32mTrue[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     16[0m [0;32mexcept[0m [0mImportError[0m[0;34m:[0m[0;34m[0m[0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/skimage_radon.py in <module>
+       12 import numpy as np
+       13 try:
+  ---> 14     import skimage
+       15     SKIMAGE_AVAILABLE = True
+       16 except ImportError:
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/__init__.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m    125[0m [0;34m[0m[0m
-  [1;32m    126[0m     [0;31m# All skimage root imports go here[0m[0;34m[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m--> 127[0;31m     from .util.dtype import (img_as_float32,
-  [0m[1;32m    128[0m                              [0mimg_as_float64[0m[0;34m,[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m    129[0m                              [0mimg_as_float[0m[0;34m,[0m[0;34m[0m[0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/__init__.py in <module>
+      125 
+      126     # All skimage root imports go here
+  --> 127     from .util.dtype import (img_as_float32,
+      128                              img_as_float64,
+      129                              img_as_float,
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/__init__.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m      4[0m [0;32mfrom[0m [0;34m.[0m[0mshape[0m [0;32mimport[0m [0mview_as_blocks[0m[0;34m,[0m [0mview_as_windows[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m      5[0m [0;32mfrom[0m [0;34m.[0m[0mnoise[0m [0;32mimport[0m [0mrandom_noise[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m----> 6[0;31m [0;32mfrom[0m [0;34m.[0m[0mapply_parallel[0m [0;32mimport[0m [0mapply_parallel[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m      7[0m [0;34m[0m[0m
-  [1;32m      8[0m [0;32mfrom[0m [0;34m.[0m[0marraycrop[0m [0;32mimport[0m [0mcrop[0m[0;34m[0m[0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/__init__.py in <module>
+        4 from .shape import view_as_blocks, view_as_windows
+        5 from .noise import random_noise
+  ----> 6 from .apply_parallel import apply_parallel
+        7 
+        8 from .arraycrop import crop
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/apply_parallel.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m      6[0m [0;34m[0m[0m
-  [1;32m      7[0m [0;32mtry[0m[0;34m:[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m----> 8[0;31m     [0;32mimport[0m [0mdask[0m[0;34m.[0m[0marray[0m [0;32mas[0m [0mda[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m      9[0m     [0mdask_available[0m [0;34m=[0m [0;32mTrue[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     10[0m [0;32mexcept[0m [0mImportError[0m[0;34m:[0m[0;34m[0m[0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/apply_parallel.py in <module>
+        6 
+        7 try:
+  ----> 8     import dask.array as da
+        9     dask_available = True
+       10 except ImportError:
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/__init__.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m      1[0m [0;32mtry[0m[0;34m:[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m----> 2[0;31m     [0;32mfrom[0m [0;34m.[0m[0mblockwise[0m [0;32mimport[0m [0mblockwise[0m[0;34m,[0m [0matop[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m      3[0m     from .core import (
-  [1;32m      4[0m         [0mArray[0m[0;34m,[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m      5[0m         [0mblock[0m[0;34m,[0m[0;34m[0m[0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/__init__.py in <module>
+        1 try:
+  ----> 2     from .blockwise import blockwise, atop
+        3     from .core import (
+        4         Array,
+        5         block,
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/blockwise.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m    286[0m [0;34m[0m[0m
-  [1;32m    287[0m [0;34m[0m[0m
-  [0;32m--> 288[0;31m [0;32mfrom[0m [0;34m.[0m[0mcore[0m [0;32mimport[0m [0mnew_da_object[0m[0;34m[0m[0;34m[0m[0m
-  [0m
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/core.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m     20[0m [0;32mimport[0m [0mnumpy[0m [0;32mas[0m [0mnp[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     21[0m [0;34m[0m[0m
-  [0;32m---> 22[0;31m [0;32mfrom[0m [0;34m.[0m [0;32mimport[0m [0mchunk[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     23[0m [0;32mfrom[0m [0;34m.[0m[0;34m.[0m [0;32mimport[0m [0mconfig[0m[0;34m,[0m [0mcompute[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     24[0m from ..base import (
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/blockwise.py in <module>
+      286 
+      287 
+  --> 288 from .core import new_da_object
+  
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/core.py in <module>
+       20 import numpy as np
+       21 
+  ---> 22 from . import chunk
+       23 from .. import config, compute
+       24 from ..base import (
 
-  [0;32m~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py[0m in [0;36m<module>[0;34m[0m
-  [1;32m     15[0m     [0;32mfrom[0m [0mnumpy[0m [0;32mimport[0m [0mtake_along_axis[0m[0;34m[0m[0;34m[0m[0m
-  [1;32m     16[0m [0;32mexcept[0m [0mImportError[0m[0;34m:[0m  [0;31m# pragma: no cover[0m[0;34m[0m[0;34m[0m[0m
-  [0;32m---> 17[0;31m     [0mtake_along_axis[0m [0;34m=[0m [0mnpcompat[0m[0;34m.[0m[0mtake_along_axis[0m[0;34m[0m[0;34m[0m[0m
-  [0m[1;32m     18[0m [0;34m[0m[0m
-  [1;32m     19[0m [0;34m[0m[0m
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
+       15     from numpy import take_along_axis
+       16 except ImportError:  # pragma: no cover
+  ---> 17     take_along_axis = npcompat.take_along_axis
+       18 
+       19 
 
-  [0;31mAttributeError[0m: module 'dask.array.numpy_compat' has no attribute 'take_along_axis'
+  AttributeError: module 'dask.array.numpy_compat' has no attribute 'take_along_axis'
 #+end_example
 :END:
 
@@ -421,12 +421,12 @@ Convert data into HDF5.
 
   import mayo
 
-  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
   training_data = mayo.get_training_data(path)
   test_data = mayo.get_test_data(path)
 
   #with h5py.File('.\mayo.h5', 'a') as hf:
-  with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'w') as hf:
+  with h5py.File('/home/gpu_user1/Documents/data/mayo.hdf5', 'w') as hf:
     train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
     test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
 
@@ -440,13 +440,9 @@ Convert data into HDF5.
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-: loading patient data: 100% 9/9 [00:19<00:00,  2.14s/it]
-:
-: loading patient data: 100% 1/1 [00:01<00:00,  1.93s/it]
-:
+: loading patient data: 100% 9/9 [00:25<00:00,  2.87s/it]
+: loading patient data: 100% 1/1 [00:01<00:00,  1.95s/it]
 : done
-:END:
 
 * DDPM
 DDPM specific parameters.
@@ -782,130 +778,150 @@ Training is performed via a python script [[file:train_cem.py]]. We examine the 
 We sample images from the trained CEM model.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import matplotlib.pyplot as plt
-  import optax
-  from jax import random
-  import jax.numpy as jnp
-  from tqdm import tqdm
-  import numpy as np
-  import h5py
+    import matplotlib.pyplot as plt
+    import optax
+    from jax import random
+    import jax.numpy as jnp
+    from tqdm import tqdm
+    import numpy as np
+    import h5py
 
-  import utils
-  from unet import Unet
-  import mayo
+    import utils
+    from unet import Unet
+    import mayo
 
-  def sample(state, condition, n, ts, key):
-    # random white noise X_T
-    key, subkey = random.split(key)
-    x_t = random.normal(subkey, shape=(n, condition.shape[0], condition.shape[1], 1))
-
-    condition = np.repeat(condition.reshape((1, condition.shape[0], condition.shape[1], 1)), n, axis=0)
-
-    step=0
-
-    for k in range(len(ts))[::-1]:
+    def sample(state, condition, n, ts, key):
+      # random white noise X_T
       key, subkey = random.split(key)
-      z = random.normal(subkey, shape=x_t.shape)
+      x_t = random.normal(subkey, shape=(n, condition.shape[0], condition.shape[1], 1))
 
-      t = ts[k]
-      dt = jnp.where(k > 0, t - ts[k-1], 0.)
+      condition = np.repeat(condition.reshape((1, condition.shape[0], condition.shape[1], 1)), n, axis=0)
 
-      inputs = jnp.concatenate((x_t, condition), axis=-1)
+      step=0
+
+      for k in range(len(ts))[::-1]:
+        key, subkey = random.split(key)
+        z = random.normal(subkey, shape=x_t.shape)
+
+        t = ts[k]
+        dt = jnp.where(k > 0, t - ts[k-1], 0.)
+
+        inputs = jnp.concatenate((x_t, condition), axis=-1)
 
 
-      f_theta = state.apply_fn(state.params, inputs, t * jnp.ones((n,)))
+        f_theta = state.apply_fn(state.params, inputs, t * jnp.ones((n,)))
 
-      # equation (40)
-      s_theta = jnp.where(k > 0, x_t/(1-jnp.exp(-t))  - jnp.exp(-t/2)/(1-jnp.exp(-t)) * f_theta,  0.)
+        # equation (40)
+        s_theta = jnp.where(k > 0, x_t/(1-jnp.exp(-t))  - jnp.exp(-t/2)/(1-jnp.exp(-t)) * f_theta,  0.)
 
-      # equation (24)
-      x_t_bar = x_t - dt * s_theta
-      x_t = jnp.exp(dt/2) * x_t_bar + jnp.sqrt(1-jnp.exp(-dt)) * z
+        # equation (24)
+        x_t_bar = x_t - dt * s_theta
+        x_t = jnp.exp(dt/2) * x_t_bar + jnp.sqrt(1-jnp.exp(-dt)) * z
 
-      x_t = jnp.clip(x_t, -1., 1.) # should we clip ...
-      #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
+        x_t = jnp.clip(x_t, -1., 1.) # should we clip ...
+        #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
 
-      step=step+1
+        step=step+1
 
-    return x_t
+      return x_t
 
-  key = random.PRNGKey(SEED)
-  n_samples = 1000
+    key = random.PRNGKey(SEED)
+    n_samples = 1000
 
-  # use the best params
-  file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
-  cem_state = utils.create_training_state(params_file=file_path)
-  print(f'using parameters from epoch {epoch} with loss {loss}')
+    # use the best params
+    file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
+    cem_state = utils.create_training_state(params_file=file_path)
+    print(f'using parameters from epoch {epoch} with loss {loss}')
 
-  ts = utils.exponential_time_schedule(T, K)
-  #path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    ts = utils.exponential_time_schedule(T, K)
+    #path='/home/gpu_user1/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
 
-  with h5py.File('/Users/huiyuanchua/Documents/data/mayo.hdf5', 'r') as hf:
-    test_data = hf['test'][36]
-  #training_data = mayo.get_training_data(path, 36, 37)
-  #n = (len(training_data) // 10) * 9
-  #test_data = training_data[n:]
+    with h5py.File('/home/gpu_user1/Documents/data/mayo.hdf5', 'r') as hf:
+      test_data = hf['test'][36]
+    #training_data = mayo.get_training_data(path, 36, 37)
+    #n = (len(training_data) // 10) * 9
+    #test_data = training_data[n:]
 
-  fd_data, ld_data = test_data[0]
+    fd_data, ld_data = test_data
 
-  # create empty samples HDF5 to store samples
-  with h5py.File('/Users/huiyuanchua/Documents/data/cem_samples.hdf5', 'w') as hf:
-    samples = hf.create_dataset('samples', data=np.zeros((n_samples, 128, 128, 1)), compression='gzip', chunks=True)
+    samples_path = '/home/gpu_user1/Documents/data/cem_samples.hdf5'
+    # create empty samples HDF5 to store samples
+    with h5py.File(samples_path, 'w') as hf:
+      samples = hf.create_dataset('samples', data=np.zeros((n_samples, 128, 128, 1)), compression='gzip', chunks=True)
 
-  # define window parameters for abdominal scans
-  # range from -125HU to 225HU centered around 50HU
-  ww = 350
-  wl = 50
-  wd = lambda x : utils.window_image(x, ww, wl)
+    # define window parameters for abdominal scans
+    # range from -125HU to 225HU centered around 50HU
+    ww = 350
+    wl = 50
+    wd = lambda x : utils.window_image(x, ww, wl)
 
-  # rescale [-125HU, 225HU] to [-1, 1]
-  ld_data_windowed = utils.window_image(ld_data, ww, wl, out_range=(-1., 1.))
+    # rescale [-125HU, 225HU] to [-1, 1]
+    ld_data_windowed = utils.window_image(ld_data, ww, wl, out_range=(-1., 1.))
 
-  for i in tqdm(range(n_samples // BATCH_SIZE)):
-    # generate x_0 from noise
-    key, subkey = random.split(key)
-    x_0_tilde = sample(cem_state, ld_data_windowed, BATCH_SIZE, ts, subkey)
+    for i in tqdm(range(n_samples // BATCH_SIZE)):
+      # generate x_0 from noise
+      key, subkey = random.split(key)
+      x_0_tilde = sample(cem_state, ld_data_windowed, BATCH_SIZE, ts, subkey)
 
-    # rescale in HU
-    x_0_tilde = x_0_tilde * ww/2 + wl
+      # rescale in HU
+      x_0_tilde = x_0_tilde * ww/2 + wl
 
-    with h5py.File('/Users/huiyuanchua/Documents/data/cem_samples.hdf5', 'a') as hf:
-      hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
+      with h5py.File(samples_path, 'a') as hf:
+        hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
 
-  with h5py.File('/Users/huiyuanchua/Documents/data/cem_samples.hdf5', 'r') as hf:
-    samples = hf['samples']
-    sample_mean = np.mean(samples, axis=0)
-    sample_variance = np.var(samples, axis=0)
+    with h5py.File(samples_path, 'r') as hf:
+      samples = hf['samples']
+      sample_mean = np.mean(samples, axis=0)
+      sample_variance = np.var(samples, axis=0)
 
-  # plot the data
-  imkwargs = dict(vmin=-0.2, vmax=0.2)
-  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
-  _ = fig.tight_layout()
-  _ = axs[0, 0].set_title("full dose image")
-  _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
-  _ = axs[0, 1].set_title("quarter dose image")
-  _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
-  _ = axs[1, 0].set_title("CEM mean")
-  _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
-  _ = axs[1, 1].set_title("CEM variance")
-  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-  _ = axs[1, 1].imshow(wd(sample_variance))
+    # plot the data
+    imkwargs = dict(vmin=-0.2, vmax=0.2)
+    fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+    _ = fig.tight_layout()
+    _ = axs[0, 0].set_title("full dose image")
+    _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
+    _ = axs[0, 1].set_title("quarter dose image")
+    _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
+    _ = axs[1, 0].set_title("CEM mean")
+    _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
+    _ = axs[1, 1].set_title("CEM variance")
+    #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+    _ = axs[1, 1].imshow(wd(sample_variance))
 
-  plt.show()
+    plt.show()
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-: Platform 'METAL' is experimental and not all JAX functionality may be correctly supported!
-: 2024-03-29 16:08:19.095068: W pjrt_plugin/src/mps_client.cc:563] WARNING: JAX Apple GPU support is experimental and not all JAX functionality is correctly supported!
-: Metal device set to: Apple M1
 : using parameters from epoch 68 with loss 0.00039
-: loading patient data: 100% 10/10 [00:00<00:00, 58.49it/s]
-:
-:  17% 17/100 [5:28:27<26:45:03, 1160.28s/it]
+: 100% 100/100 [12:04:09<00:00, 434.50s/it]
 :END:
-:END:
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+    with h5py.File(samples_path, 'r') as hf:
+      samples = hf['samples']
+      sample_mean = np.mean(samples, axis=0)
+      sample_variance = np.var(samples, axis=0)
+
+    # plot the data
+    imkwargs = dict(vmin=-0.2, vmax=0.2)
+    fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+    _ = fig.tight_layout()
+    _ = axs[0, 0].set_title("full dose image")
+    _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
+    _ = axs[0, 1].set_title("quarter dose image")
+    _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
+    _ = axs[1, 0].set_title("CEM mean")
+    _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
+    _ = axs[1, 1].set_title("CEM variance")
+    #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+    _ = axs[1, 1].imshow(wd(sample_variance))
+
+    plt.show()
+
+#+end_src
+
+#+RESULTS:
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
