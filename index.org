@@ -427,6 +427,8 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
   from pathlib import Path
 
   import mayo
+  import utils
+
   path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
   training_data = mayo.get_training_data(path)
   test_data = mayo.get_test_data(path)
@@ -453,13 +455,6 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-: loading patient data: 100% 9/9 [00:06<00:00,  1.38it/s]
-:
-: loading patient data: 100% 1/1 [00:00<00:00,  1.64it/s]
-:
-: done
-:END:
 
 * DDPM
 DDPM specific parameters.
