@@ -453,8 +453,8 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 #+end_src
 
 #+RESULTS:
-: loading patient data: 100% 9/9 [00:06<00:00,  1.45it/s]
-: loading patient data: 100% 1/1 [00:00<00:00,  2.71it/s]
+: loading patient data: 100% 9/9 [00:06<00:00,  1.46it/s]
+: loading patient data: 100% 1/1 [00:00<00:00,  1.62it/s]
 : done
 
 

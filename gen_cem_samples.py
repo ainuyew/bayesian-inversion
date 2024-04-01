@@ -79,11 +79,11 @@ def main(n_samples=1000):
 SEED=42
 T=10.
 K=1000
-BATCH_SIZE = 10
+BATCH_SIZE = 1
 PROJECT_DIR=os.path.abspath('.')
 
 if __name__ == '__main__':
     try:
-        main(n_samples=1000)
+        main(n_samples=100)
     except Exception as e:
         print(f'Unexpected {e}, {type(e)}')
