@@ -67,6 +67,8 @@ description as a private header tag "WaterAttenuationCoefficient" (see https://w
 - Running CEM sampling on server for 1000 samples. This is based on 128x128 training data and conditioned on 36th image frame where the lesion was identified. Samples are recorded in HDF5. From which, we can calculate the mean/variance.
 - Rewrote the CEM/DDPM training code to run on 512x512 training data. The training data will be loaded into memory (when needed) from HDF5 files instead of the entire data into memory. CEM training code ran for 2 epochs on M1 without out of memory errors. Will test on server when CEM sampling is done. Better resolution is expected from 512x512 data.
 - Wrote code to generate CEM samples outside of org (jupyter construct). This code will be executed on server instead. Yet to be tested.
+** 2024-03-31
+- windowing of CT images is probably not neccessary for training. should test out preprocessing training data to be within -1000 HU to 1000 HU. Resulting sample will then simply be multiplied by 1000 and to window for display.
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -450,6 +452,14 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
   print('done')
 #+end_src
 
+#+RESULTS:
+:RESULTS:
+: loading patient data: 100% 9/9 [00:06<00:00,  1.38it/s]
+:
+: loading patient data: 100% 1/1 [00:00<00:00,  1.64it/s]
+:
+: done
+:END:
 
 * DDPM
 DDPM specific parameters.
@@ -770,7 +780,6 @@ We show the results from samples generated externally.
   plt.show()
 #+end_src
 
-
 * CEM
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -994,15 +1003,21 @@ We show the results from samples generated externally.
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import utils
   import h5py
+  from pathlib import Path
+  import numpy as np
+
+  ww = 350
+  wl = 50
+
   with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
-      images = [utils.window_image(img[0], 350, 50) for img in hf['test'][36:52]]
+      test = hf['test']
+      images = [utils.window_image(img[0] * ww/2 + wl, ww, wl) for img in test[36:52]]
+      print(f'{np.min(test)} - {np.max(test)}')
 
   utils.show_img_grid(images)
 
 #+end_src
 
-#+RESULTS:
-[[file:./.ob-jupyter/dfdfca26a5c897f080d498c05985418c8accda5f.png]]
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -1017,7 +1032,6 @@ We show the results from samples generated externally.
 
 #+RESULTS:
 [[file:./.ob-jupyter/140575da8544742fc06c6de23df6f131b8712527.png]]
-
 
 * Reads
 - Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html

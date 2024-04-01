@@ -61,7 +61,7 @@ def main(n_samples=1000):
         fd_data, ld_data = hf['test'][36]
 
     # create empty samples HDF5 to store samples
-    samples_path = f'{Path.home()}/Documents/data/cem_samples.hdf5'
+    samples_path = f'{PROJECT_DIR}/cem_samples.hdf5'
     with h5py.File(samples_path, 'w') as hf:
         samples = hf.create_dataset('samples', data=np.zeros((n_samples, 512, 512, 1)), compression='gzip', chunks=True)
 
@@ -69,9 +69,6 @@ def main(n_samples=1000):
         # generate x_0 from noise
         key, subkey = random.split(key)
         x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
-
-        # rescale from (-1., 1.) to HU
-        #x_0_tilde = x_0_tilde * ww/2 + wl
 
         with h5py.File(samples_path, 'a') as hf:
             hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
