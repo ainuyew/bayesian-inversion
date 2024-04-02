@@ -36,8 +36,8 @@ def get_pixel_arrays(file_paths):
         # resize image to run with smaller ram/vram
         hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
 
-        # express HU in 1/1000 to range roughly range from -1. to 1.
-        hu_values = hu_values / 1000.
+        # rescale -1000 HU to -1 and 0 HU to 0.
+        hu_values = (hu_values + 1000.) / 1000.
 
         pixel_arrays.append(hu_values.reshape((hu_values.shape[0], hu_values.shape[1], 1)))
 
@@ -61,9 +61,9 @@ def get_data(folder, patients, slice_start=0, slice_end=-1):
         PEAK = 1.
         for pixel_arrays in fd_pixel_arrays:
             image_in = np.clip((pixel_arrays + 1.)/2*255, 0., 255.)
-            noise_mask = np.random.poisson(image_in/255. * PEAK).astype(float)/PEAK * 255.
+            noise_mask = np.random.poisson(image_in/255. * PEAK)/PEAK * 255.
             image_out = np.clip(image_in + noise_mask, 0., 255.)
-            uld_pixel_arrays.append((image_out- 127.5)/127.5)
+            uld_pixel_arrays.append(utils.normalize_to_neg_one_to_one(image_out))
 
         #ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
 

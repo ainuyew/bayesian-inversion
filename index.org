@@ -42,7 +42,7 @@ We examine some full dose samples from the training images.
 
   import utils
 
-  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'
 
   ima_path=f'{path}/Training_Image_Data/3mm B30'
   ima_fd_path=f'{ima_path}/full_3mm/L067/full_3mm'
@@ -73,9 +73,8 @@ We examine some full dose samples from the training images.
 
 #+RESULTS:
 :RESULTS:
-: 9it [00:00, 282.16it/s]
-:
-[[file:./.ob-jupyter/b9cd0d13c99d385f8bc713977db026823dafb0ef.png]]
+: 9it [00:00, 30.54it/s]
+[[file:./.ob-jupyter/62684a4e9b9bf3b139a9c48837355674f1271718.png]]
 :END:
 
 
@@ -108,11 +107,10 @@ We apply forward projection on the batch to obtain their respective sinograms (R
 
 #+RESULTS:
 :RESULTS:
-: 0it [00:00, ?it/s]/Users/huiyuanchua/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
+: 0it [00:00, ?it/s]/home/huiyuanchua/miniconda3/envs/mlenv/lib/python3.11/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
 :   warn('Radon transform: image must be zero outside the '
-: 9it [00:09,  1.06s/it]
-:
-[[file:./.ob-jupyter/8fbb279e370b28f09916c7bfb7b7e118edbee3bb.png]]
+: 9it [01:30, 10.04s/it]
+[[file:./.ob-jupyter/47ed68ef6a61bb80822d4a7de7113ca439045123.png]]
 :END:
 
 We now apply filtered back projection to reconstruct the original image using the filter "ramp".
@@ -147,8 +145,8 @@ We now apply filtered back projection to reconstruct the original image using th
 
 #+RESULTS:
 :RESULTS:
-: FBP rms reconstruction error: 135
-[[file:./.ob-jupyter/0b2ddc4163571ee1136c9b576cdeda1fc881f109.png]]
+: FBP rms reconstruction error: 108
+[[file:./.ob-jupyter/26fc22986b18be7aaa09c438965906b5f475ac39.png]]
 :END:
 
 We adopt the second method of generating low dose images from normal dose images [cite:@elhamiasl2020_low-dose_x-ray_ct]. Specifically, we generate virtual projections from rescontructed full dose images, simulate noise due to a lower dosage, and reconstruct the image.
@@ -187,6 +185,7 @@ For simplicity, let's add Poisson noise to the full dose image.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import numpy as np
+  import utils
   PEAK = 1.
   image_in = utils.window_image(image, ww, wl)
   noise_mask = np.random.poisson(image_in/255. * PEAK)/ PEAK * 255.
@@ -196,9 +195,9 @@ For simplicity, let's add Poisson noise to the full dose image.
 
 #+RESULTS:
 :RESULTS:
-: <matplotlib.image.AxesImage at 0x16be3fd10>
-#+attr_org: :width 432
-[[file:./.ob-jupyter/574ead4b7ae54586ec9dff356f585da2c68ca4b7.png]]
+: <matplotlib.image.AxesImage at 0x7fd080f35490>
+#+attr_org: :width 437
+[[file:./.ob-jupyter/650a9e7b1dd8a3065d3a03286a9c96fcfd27612e.png]]
 :END:
 
 Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and compare a few samples.
@@ -210,7 +209,7 @@ Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and com
 
   import utils
 
-  path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
   training_data = mayo.get_training_data(path, 112, 113) # pull the middle slices of each patient
   fd_ima, qd_ima = training_data[len(training_data) // 2]
   noise = fd_ima - qd_ima
@@ -246,7 +245,7 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
   #import numpy as np
   #from pathlib import Path
 
-  path='/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'
 
   dcm_path=f'{path}/Training_Projection_Data/L067'
   dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
@@ -254,7 +253,7 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
   import odl
   from odl.contrib.datasets.ct import mayo
 
-  mayo_dir = '/home/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
+  mayo_dir = f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
 
   # Load reference reconstruction
   #volume_folder = mayo_dir + '/Training Cases/L067/full_1mm_sharp'
@@ -431,9 +430,10 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4.5), sharex=True, sharey=True)
     _ = fig.tight_layout()
-    plt.grid(None)
+    ax1.grid(None)
     ax1.set_title("Ground Truth")
     ax1.imshow(utils.window_image(fd_data * 1000., ww, wl), cmap=plt.cm.Greys_r)
+    ax2.grid(None)
     ax2.set_title("Ultra Low Dose Image")
     ax2.imshow(utils.window_image(ld_data * 1000., ww, wl), cmap=plt.cm.Greys_r)
     plt.show()
@@ -441,11 +441,9 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
 #+RESULTS:
 :RESULTS:
-: loading patient data: 100% 9/9 [00:10<00:00,  1.12s/it]
-:
-: loading patient data: 100% 1/1 [00:01<00:00,  1.31s/it]
-:
-[[file:./.ob-jupyter/0a68169018bb0b163af23963f9f74ada1a3cb8c4.png]]
+: loading patient data: 100% 9/9 [01:10<00:00,  7.81s/it]
+: loading patient data: 100% 1/1 [00:06<00:00,  6.75s/it]
+[[file:./.ob-jupyter/178da7ad6df94712571810badd3eb3f741eab2ad.png]]
 :END:
 
 * DDPM
