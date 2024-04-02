@@ -1,74 +1,6 @@
 #+TITLE: Examination of DDPM and CEM on Bayesian Inversion problems.
 #+setupfile: ~/.emacs.d/setupfile.org
 
-* Log
-** 2024-03-15 :meeting:
-- Professor Wang's server is downloading the Mayo training data.
-- For this problem, CEM has to be conditioned on three parameters (instead of two), namely:
-  1) Gaussian noise level $t$ (applied to ground truth $\bm{X}_0$)
-  2) forward diffused ground truth $\bm{X}_t$ at noise level $t$
-  3) low dose CT image
-- The low does CT image is a new parameter and conditions the neural network to denoise $\bm{X}_t$ to $\widetilde{\bm{X}_0}$ with similar probability distribution to $\bm{X}_0$ (identical to earlier DDPM/CEM experiments/exercise).
-- The number of training samples is too little, and we will need to create more samples akin to [cite:@adler2018_deep_bayesian_inversion]. @Huiyuan to reach out to authors on code to create new samples.
-- For this exercise, we can amend the earlier conditioned U-net to allow for two channels instead of one. Professor Wang has a sample pytorch code here https://github.com/wang-zhongjian/CFNO/blob/main/codes/unet.py.
-- Code for this problem is stored here https://github.com/ainuyew/bayesian-inversion.
-
-** 2024-03-16
-- Found a paper and assodicated code to simulate low-dose samples at https://github.com/smuzd/LD-CT-simulation/tree/master ([cite:@zeng2015_simple_low-dose_x-ray]). The Matlab code is dependent on MIRT library (https://github.com/JeffFessler/mirt), which is not actively maintained (author has switched to Julia). The code fails to run on Octave.
-- Found another github repository (https://github.com/xinario/SAGAN; https://link.springer.com/article/10.1007/s10278-018-0056-0) working on the CT scans with similar motives (to denoise low dosage CT scans). Octave does not support all the Matlab functions (e.g. function ~fanbeam~ in the image package) required by this code.
-- Read a 2020 paper (https://dx.doi.org/10.1088/1361-6560/ab8953) on simulating low dose CT scans that provided a summary on advances thus far, and introduced their better models/methods.  This goes beyond earlier methods of simply introducing Poisson noise (for quantum noise) and Gaussian noise (for electronic noise). The reearch tests various models to account for negative effects such as beam hardening, and compares their models against actual low dose CT scans.
-- Alternatively ([cite:@yi2018_sharpness-aware_low_dose], https://arxiv.org/abs/1708.06453), there is a 850/dose deceased piglets CT scan data set with
-
-** 2024-03-17
-- https://github.com/odlgroup/odl/issues/1569 add Poisson noise to projection data
-- https://github.com/odlgroup/odl/tree/25ec783954a85c2294ad5b76414f8c7c3cd2785d/odl/contrib/datasets/ct code for mayo reconstruction by authors
-** 2024-03-18
-- Tried unsuccessfully to install python 3.8 to work with ODL (last released in 2018). ODL will only work with numpy < 1.20. The author has contributed the Mayo data code to ODL. Downloaded source code of ODL with the intent to correct/update the code to work with 3.10 and associated dependencies.
-description as a private header tag "WaterAttenuationCoefficient" (see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4644156/). This is neccessary to calibrate the projections to water (HU=0).
-- Unable to run sample ODL code on M1. 3D geometry ray transformation requires CUDA. Sample code show how to create training data.
-- There's matlab code  (https://github.com/xinario/SAGAN/blob/master/poisson_noise_simulation/add_poisson_noise.m) that details how it's done in reference to the paper ([cite:@yi2018_sharpness-aware_low_dose]). The code adds noise to an image. The sinograms are created prior to adding of noise. A reconstructed image is returned by the function.
-
-#+DOWNLOADED: screenshot @ 2024-03-18 19:25:45
-[[file:20240318-192545_screenshot.png]]
-
-- [cite:@yi2018_sharpness-aware_low_dose] uses images from few subjects (36 subjects). Hence, there's little independence between the images.
-** 2024-03-19
-- National Lung Screening Trial (NLST) at https://wiki.cancerimagingarchive.net/display/NLST has 11.TB of CT scans/images for 26,254 subjects.
-- https://huggingface.co/docs/diffusers/v0.25.0/en/api/models/unet2d-cond has a conditional U-Net that ".. takes a noisy sample, conditional state, and a timestep and returns a sample shaped output.".
-- Jax conditional Unet should be able to embed multiple channels in the data i.e. it has a shape of (n_batch, rows, columns, n_channel) = (1000, 512, 512, 2).
-- Worked on code to train DDPM.
-** 2024-03-20
-- Training code is crashing with high memory consumption. Reducing number of images did not help. Will need to scale image down to see if that helps.
-- It might be worthwhile to try to run this on another library from jax in case that is the problem. There are plenty of Unet implementations on CT scans e.g. https://medium.com/@fabio.sancinetti/u-net-convnet-for-ct-scan-segmentation-6cc0d465eed3. Unet was afterall created for modeling image segmentation problems for medical applications [cite:@ronneberger2015_u-net_convolutional_networks].
-** 2024-03-21
-- Successfully train DDPM using smaller images (128x128 instead of 512x512) with very small loss. Working on sampling code for DDPM. Will need to retrain DDPM on 90% data to reserve remaining 10% for testing.
-- Need to investigate on how to measure success/failure. This should largely follow the paper [cite:@adler2018_deep_bayesian_inversion].
-- Outstanding tasks/ideas:
-  - CEM code
-  - code to create more sample data (based on ODL library) from full dose Helical sinograms?
-  - the condition is based on quarter dose images. do we need different dosage?
-  - run model on full resolution 512x512
-  - Mayo test data has quarter dose (and omits full dose). Lesion information is available. Some qualitative checks can be performed to see if samples show the lesions in a clearer manner?
-** 2024-03-23
-- managed to train DPPM and CEM on server. To update loss and numer of epochs.
-- managed to generate 1000 samples on M1 using jax-metal. The mean sample is not ideal. The problem might be the loss function used (MSE). DDPM was trained for 20 epochs on 90% training data. The sample was based on the remaining unseen 10% data.
-- unable to run odl sample code on local nvidia machine (ran out of memory). Will need to try this on the server.
-** 2024-03-26
-- Reading up on batch normalization. https://towardsdatascience.com/batch-norm-explained-visually-how-it-works-and-why-neural-networks-need-it-b18919692739, https://en.wikipedia.org/wiki/Batch_normalization, https://arxiv.org/abs/1502.03167.
-- CEM sampling (100 samples) with data rescaled to -1 to 1 seem to produce good samples. Next task at hand is to figure out if it's better than the low dose sample. We can do this by comparing how well the lesion can be seen in the contrast. See [cite:@adler2018_deep_bayesian_inversion].
-- Will want to consider to rescale data by z-score. mean and variance will be based on training data.
-** 2024-03-29
-- preprocessing CT scans https://zapaishchykova.medium.com/preprocessing-ct-in-python-2a7e8170ac9f
-- open source software to read CT scans https://www.slicer.org
-- summary on windowing CT scans https://kevalnagda.github.io/ct-windowing
-*** DONE to investigate out of memory issues when working with larger images 512x512
-*** DONE store samples in files (instead of in memory) to calculate mean and variance. HDF5 format https://www.pytables.org/FAQ.html or https://docs.h5py.org/en/stable/#:~:text=HDF5%20lets%20you%20store%20huge,and%20tagged%20however%20you%20want. we cannot load everything into memory.
-** 2024-03-30
-- Running CEM sampling on server for 1000 samples. This is based on 128x128 training data and conditioned on 36th image frame where the lesion was identified. Samples are recorded in HDF5. From which, we can calculate the mean/variance.
-- Rewrote the CEM/DDPM training code to run on 512x512 training data. The training data will be loaded into memory (when needed) from HDF5 files instead of the entire data into memory. CEM training code ran for 2 epochs on M1 without out of memory errors. Will test on server when CEM sampling is done. Better resolution is expected from 512x512 data.
-- Wrote code to generate CEM samples outside of org (jupyter construct). This code will be executed on server instead. Yet to be tested.
-** 2024-03-31
-- windowing of CT images is probably not neccessary for training. should test out preprocessing training data to be within -1000 HU to 1000 HU. Resulting sample will then simply be multiplied by 1000 and to window for display.
 * Problem Statement
 This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
@@ -118,6 +50,8 @@ We examine some full dose samples from the training images.
   pathlist = Path(ima_fd_path).rglob('*.IMA')
   ima_files = [ima for ima in pathlist]
 
+  ww = 350
+  wl = 50
   n = 3
   images=[]
   ima_batch = np.random.choice(ima_files, size=n**2, replace=False)
@@ -133,15 +67,15 @@ We examine some full dose samples from the training images.
       images.append(densities)
       ax = axs[i // n][i % n]
       #ax.imshow(image, cmap=plt.cm.Greys_r,)
-      ax.imshow(utils.normalize_image(densities), cmap=plt.cm.Greys_r,)
+      ax.imshow(utils.window_image(hu_values, ww, wl), cmap=plt.cm.Greys_r,)
   plt.show()
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-: 9it [00:00, 282.17it/s]
+: 9it [00:00, 282.16it/s]
 :
-[[file:./.ob-jupyter/d106bffcb7948cba61b5dba49266665e75137c41.png]]
+[[file:./.ob-jupyter/b9cd0d13c99d385f8bc713977db026823dafb0ef.png]]
 :END:
 
 
@@ -174,11 +108,11 @@ We apply forward projection on the batch to obtain their respective sinograms (R
 
 #+RESULTS:
 :RESULTS:
-: 0it [00:00, ?it/s]/Users/huiyuanchua/miniconda3/envs/venv310/lib/python3.10/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
+: 0it [00:00, ?it/s]/Users/huiyuanchua/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/skimage/transform/radon_transform.py:75: UserWarning: Radon transform: image must be zero outside the reconstruction circle
 :   warn('Radon transform: image must be zero outside the '
-: 9it [00:06,  1.42it/s]
+: 9it [00:09,  1.06s/it]
 :
-[[file:./.ob-jupyter/9908590d1629c61ffc91bfa8d539c672a7a6b737.png]]
+[[file:./.ob-jupyter/8fbb279e370b28f09916c7bfb7b7e118edbee3bb.png]]
 :END:
 
 We now apply filtered back projection to reconstruct the original image using the filter "ramp".
@@ -191,18 +125,21 @@ We now apply filtered back projection to reconstruct the original image using th
   import utils
 
   sinogram = sinograms[4]
-  image = images[4]
-  reconstruction_fbp = iradon(sinogram, theta=theta, filter_name='ramp')
+  image = images[4] * 1000 - 1000
+  reconstruction_fbp = iradon(sinogram, theta=theta, filter_name='ramp') * 1000 - 1000
   error = reconstruction_fbp - image
   print(f'FBP rms reconstruction error: {np.sqrt(np.mean(error**2)):.3g}')
+
+  ww = 350
+  wl = 50
 
   imkwargs = dict(vmin=-0.2, vmax=0.2)
   fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
   _ = fig.tight_layout()
   ax1.set_title("Ground Truth")
-  ax1.imshow(utils.normalize_image(image), cmap=plt.cm.Greys_r)
+  ax1.imshow(utils.window_image(image, ww, wl), cmap=plt.cm.Greys_r)
   ax2.set_title("FBP image")
-  ax2.imshow(utils.normalize_image(reconstruction_fbp), cmap=plt.cm.Greys_r)
+  ax2.imshow(utils.window_image(reconstruction_fbp, ww, wl), cmap=plt.cm.Greys_r)
   ax3.set_title("Reconstruction error\nFiltered back projection")
   ax3.imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
   plt.show()
@@ -210,8 +147,58 @@ We now apply filtered back projection to reconstruct the original image using th
 
 #+RESULTS:
 :RESULTS:
-: FBP rms reconstruction error: 0.105
-[[file:./.ob-jupyter/aae84632d2a803a7aac0bf7c4eb669df0b4008ec.png]]
+: FBP rms reconstruction error: 135
+[[file:./.ob-jupyter/0b2ddc4163571ee1136c9b576cdeda1fc881f109.png]]
+:END:
+
+We adopt the second method of generating low dose images from normal dose images [cite:@elhamiasl2020_low-dose_x-ray_ct]. Specifically, we generate virtual projections from rescontructed full dose images, simulate noise due to a lower dosage, and reconstruct the image.
+([cite:@yi2018_sharpness-aware_low_dose]) $N\sim \text{Poisson}(N_0 \exp(-y)) + \text{Gaussian}(0, \sigma_e^2)$ where $N_0$ is the intensity of the x-ray source, $y$ is the sinogram data, and $\sigma_e^2$ represent the eletrical noise standard deviation.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import numpy as np
+
+  N0 = 100000 # x-ray influx
+  slice_thickness = 0.03 # in cm
+  epsilon = 5 # small number > 0 that reflects smallest possible detected photon count
+  sinogramCT = N0 * np.exp(-sinogram * slice_thickness)
+  sinogram_noisy = np.random.poisson(sinogramCT) # poissrnd(sinogram)
+  sinogram_out = -np.log(sinogram_noisy/N0)/slice_thickness
+
+  idx = np.isinf(sinogram_out)
+  sinogram_out[idx] = -np.log(epsilon/N0)/slice_thickness
+  # we need to update infinity values to -log(epsilon/N0)/0.0625 where epsilon =5
+
+  reconstruction_fbp = iradon(sinogram_out, theta=theta, filter_name='ramp') * 1000 - 1000
+
+  #plt.imshow(sinogram_out)
+  plt.imshow(utils.window_image(reconstruction_fbp, ww, wl), cmap=plt.cm.Greys_r)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: /var/folders/bc/r2l4k0lx343ds2rjs_2mjns00000gn/T/ipykernel_1478/3904578395.py:8: RuntimeWarning: divide by zero encountered in log
+:   sinogram_out = -np.log(sinogram_noisy/N0)/slice_thickness
+: <matplotlib.image.AxesImage at 0x1764d8ed0>
+#+attr_org: :width 432
+[[file:./.ob-jupyter/a2c5cd91c793b7ab083a82fbbf06731021691179.png]]
+:END:
+
+For simplicity, let's add Poisson noise to the full dose image.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import numpy as np
+  PEAK = 1.
+  image_in = utils.window_image(image, ww, wl)
+  noise_mask = np.random.poisson(image_in/255. * PEAK)/ PEAK * 255.
+  image_noisy = np.clip(image_in + noise_mask, 0., 255.)
+  plt.imshow(image_noisy, cmap=plt.cm.Greys_r)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: <matplotlib.image.AxesImage at 0x16be3fd10>
+#+attr_org: :width 432
+[[file:./.ob-jupyter/574ead4b7ae54586ec9dff356f585da2c68ca4b7.png]]
 :END:
 
 Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and compare a few samples.
@@ -425,6 +412,7 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import h5py
   from pathlib import Path
+  import matplotlib.pyplot as plt
 
   import mayo
   import utils
@@ -433,28 +421,32 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
   training_data = mayo.get_training_data(path)
   test_data = mayo.get_test_data(path)
 
-  # rescale by abdominal window
-  ww = 350 # range
-  wl = 50 # center
-
-  training_data = utils.window_image(training_data, ww, wl, out_range=(-1., 1.))
-  test_data= utils.window_image(test_data, ww, wl, out_range=(-1., 1.))
-
   with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'w') as hf:
 
     train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
     test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
+    fd_data, ld_data = test[36]
+    ww = 350
+    wl = 50
 
-    #hf["train"].resize((hf["train"].shape[0] + training_data.shape[0]), axis = 0)
-    #hf["train"][-training_data.shape[0]:] = training_data
-
-    #hf["test"].resize((hf["test"].shape[0] + test_data.shape[0]), axis = 0)
-    #hf["test"][-test_data.shape[0]:] = test_data
-
-  print('done')
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+    _ = fig.tight_layout()
+    plt.grid(None)
+    ax1.set_title("Ground Truth")
+    ax1.imshow(utils.window_image(fd_data * 1000., ww, wl), cmap=plt.cm.Greys_r)
+    ax2.set_title("Ultra Low Dose Image")
+    ax2.imshow(utils.window_image(ld_data * 1000., ww, wl), cmap=plt.cm.Greys_r)
+    plt.show()
 #+end_src
 
 #+RESULTS:
+:RESULTS:
+: loading patient data: 100% 9/9 [00:10<00:00,  1.12s/it]
+:
+: loading patient data: 100% 1/1 [00:01<00:00,  1.31s/it]
+:
+[[file:./.ob-jupyter/0a68169018bb0b163af23963f9f74ada1a3cb8c4.png]]
+:END:
 
 * DDPM
 DDPM specific parameters.
@@ -930,30 +922,42 @@ We sample images from the trained CEM model.
 :END:
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-    with h5py.File(samples_path, 'r') as hf:
-      samples = hf['samples']
-      sample_mean = np.mean(samples, axis=0)
-      sample_variance = np.var(samples, axis=0)
+  samples_path = f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
+  with h5py.File(samples_path, 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
 
-    # plot the data
-    imkwargs = dict(vmin=-0.2, vmax=0.2)
-    fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
-    _ = fig.tight_layout()
-    _ = axs[0, 0].set_title("full dose image")
-    _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
-    _ = axs[0, 1].set_title("quarter dose image")
-    _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
-    _ = axs[1, 0].set_title("CEM mean")
-    _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
-    _ = axs[1, 1].set_title("CEM variance")
-    #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-    _ = axs[1, 1].imshow(wd(sample_variance))
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(wd(sample_variance))
 
-    plt.show()
+  plt.show()
 
 #+end_src
 
 #+RESULTS:
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mNameError[0m                                 Traceback (most recent call last)
+: Cell [0;32mIn[1], line 1[0m
+: [0;32m----> 1[0m samples_path [38;5;241m=[39m [38;5;124mf[39m[38;5;124m'[39m[38;5;132;01m{[39;00mPath[38;5;241m.[39mhome()[38;5;132;01m}[39;00m[38;5;124m/Documents/bayesian-inversion/cem_samples.hdf5[39m[38;5;124m'[39m
+: [1;32m      2[0m [38;5;28;01mwith[39;00m h5py[38;5;241m.[39mFile(samples_path, [38;5;124m'[39m[38;5;124mr[39m[38;5;124m'[39m) [38;5;28;01mas[39;00m hf:
+: [1;32m      3[0m   samples [38;5;241m=[39m hf[[38;5;124m'[39m[38;5;124msamples[39m[38;5;124m'[39m]
+:
+: [0;31mNameError[0m: name 'Path' is not defined
+:RESULTS:
+# [goto error]
+:END:
 
 We show the results from samples generated externally.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
@@ -973,26 +977,79 @@ We show the results from samples generated externally.
     sample_mean = np.mean(samples, axis=0)
     sample_variance = np.var(samples, axis=0)
 
+  ww = 350
+  wl = 50
+  error = (sample_mean - fd_data) * ww/2 + wl
+  error_ld = (sample_mean - ld_data) * ww/2 + wl
+
   # plot the data
   imkwargs = dict(vmin=-0.2, vmax=0.2)
   #fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
   fig, axs = plt.subplots(2, 2, figsize=(8, 4.5))
   _ = fig.tight_layout()
   _ = axs[0, 0].set_title("full dose image")
-  _ = axs[0, 0].imshow(utils.window_image(fd_data, 350, 50), cmap=plt.cm.Greys_r)
+  _ = axs[0, 0].imshow(utils.window_image(fd_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
   _ = axs[0, 1].set_title("quarter dose image")
-  _ = axs[0, 1].imshow(utils.window_image(ld_data, 350, 50), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].imshow(utils.window_image(ld_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
   _ = axs[1, 0].set_title("CEM mean")
-  _ = axs[1, 0].imshow(utils.window_image(sample_mean, 350, 50), cmap=plt.cm.Greys_r)
-  _ = axs[1, 1].set_title("CEM variance")
+  _ = axs[1, 0].imshow(utils.window_image(sample_mean * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM - FD")
   #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-  _ = axs[1, 1].imshow(utils.window_image(sample_variance, 350, 50))
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(error), cmap=plt.cm.Greys_r)
 
+  plt.show()
+  print(f'{np.mean(error)}, {np.mean(error_ld)}')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/9c9088e537c76eb0c0020c3036fa270840b63c44.png]]
+: 130.34633930050992, 130.28964145505094
+:END:
+
+Full Dose Image
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  _ = plt.imshow(utils.window_image(fd_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  plt.grid(None)
   plt.show()
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/2b1fc5abf5912a361a8667e5d9752bb60caa18b1.png]]
+:RESULTS:
+#+attr_org: :width 432
+[[file:./.ob-jupyter/a6af64ac4d8bc1324f357378df7b8598d2d9e5aa.png]]
+:END:
+
+Low Dose Image
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  _ = plt.imshow(utils.window_image(ld_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  plt.grid(None)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 432
+[[file:./.ob-jupyter/5a102a69e939e24a31652c6d5b645794747e09c4.png]]
+:END:
+
+CEM sample mean
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  _ = plt.imshow(utils.window_image(sample_mean * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  plt.grid(None)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 432
+[[file:./.ob-jupyter/adce9197a5739afccad6d68e141f59b1cfd3b278.png]]
+:END:
+
+
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export

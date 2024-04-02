@@ -34,7 +34,10 @@ def get_pixel_arrays(file_paths):
         hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
 
         # resize image to run with smaller ram/vram
-        #hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
+        hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
+
+        # express HU in 1/1000 to range roughly range from -1. to 1.
+        hu_values = hu_values / 1000.
 
         pixel_arrays.append(hu_values.reshape((hu_values.shape[0], hu_values.shape[1], 1)))
 
@@ -53,10 +56,19 @@ def get_data(folder, patients, slice_start=0, slice_end=-1):
         ld_file_paths = sorted(list(Path(f'{ld_path}/{patient}').rglob('*.IMA')))[slice_start:slice_end]
 
         fd_pixel_arrays = get_pixel_arrays(fd_file_paths)
-        ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
+
+        uld_pixel_arrays = []
+        PEAK = 1.
+        for pixel_arrays in fd_pixel_arrays:
+            image_in = np.clip((pixel_arrays + 1.)/2*255, 0., 255.)
+            noise_mask = np.random.poisson(image_in/255. * PEAK).astype(float)/PEAK * 255.
+            image_out = np.clip(image_in + noise_mask, 0., 255.)
+            uld_pixel_arrays.append((image_out- 127.5)/127.5)
+
+        #ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
 
         fd_data[0:0] = fd_pixel_arrays # concatenate two lists
-        ld_data[0:0] = ld_pixel_arrays
+        ld_data[0:0] = uld_pixel_arrays
 
     return np.array(list(zip(fd_data, ld_data)))
 
