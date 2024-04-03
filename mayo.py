@@ -5,7 +5,7 @@ import zipfile
 import tqdm
 from pathlib import Path
 from io import BytesIO, TextIOWrapper
-from skimage.transform import resize
+from skimage.transform import resize, radon, rescale, iradon
 
 import utils
 
@@ -23,6 +23,27 @@ def unzip(zip_path):
             files.append((name, dcm))
     return files
 
+def add_poisson_noise(image, N0=30000, slice_thickness=.03, epsilon=5, filter_name='ramp'):
+
+    theta = np.linspace(0., 180., max(image.shape), endpoint=False)
+    sinogram = radon(image, theta=theta, circle=False)
+
+    sinogram_in = N0 * np.exp(-sinogram * slice_thickness)
+    sinogram_noisy = np.random.poisson(sinogram_in)
+    sinogram_out = -np.log(sinogram_noisy/N0)/slice_thickness
+
+    # update inf values
+    idx = np.isinf(sinogram_out)
+    sinogram_out[idx] = -np.log(epsilon/N0)/slice_thickness
+
+    fbp_image = iradon(sinogram_out, theta=theta, filter_name=filter_name, circle=False)
+    return fbp_image
+
+def add_simple_noise(image, peak=1):
+    image_in = (image - image.min())/(image.max() - image.min()) * 255
+    noise_mask = np.random.poisson(image_in/255 * peak)/peak * 255
+    return image_in + noise_mask
+
 def get_pixel_arrays(file_paths):
     pixel_arrays = []
     for ima_file_path in file_paths:
@@ -34,10 +55,10 @@ def get_pixel_arrays(file_paths):
         hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
 
         # resize image to run with smaller ram/vram
-        hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
+        #hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
 
-        # rescale -1000 HU to -1 and 0 HU to 0.
-        hu_values = (hu_values + 1000.) / 1000.
+        # rescale 1/1000 HU
+        hu_values = hu_values / 1000.
 
         pixel_arrays.append(hu_values.reshape((hu_values.shape[0], hu_values.shape[1], 1)))
 
@@ -56,19 +77,10 @@ def get_data(folder, patients, slice_start=0, slice_end=-1):
         ld_file_paths = sorted(list(Path(f'{ld_path}/{patient}').rglob('*.IMA')))[slice_start:slice_end]
 
         fd_pixel_arrays = get_pixel_arrays(fd_file_paths)
-
-        uld_pixel_arrays = []
-        PEAK = 1.
-        for pixel_arrays in fd_pixel_arrays:
-            image_in = np.clip((pixel_arrays + 1.)/2*255, 0., 255.)
-            noise_mask = np.random.poisson(image_in/255. * PEAK)/PEAK * 255.
-            image_out = np.clip(image_in + noise_mask, 0., 255.)
-            uld_pixel_arrays.append(utils.normalize_to_neg_one_to_one(image_out))
-
-        #ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
+        ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
 
         fd_data[0:0] = fd_pixel_arrays # concatenate two lists
-        ld_data[0:0] = uld_pixel_arrays
+        ld_data[0:0] = ld_pixel_arrays
 
     return np.array(list(zip(fd_data, ld_data)))
 

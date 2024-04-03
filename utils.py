@@ -189,3 +189,4 @@ def peak_signal_to_noise_ratio(x, y):
         return np.Inf
     PIXEL_MAX = 255.0
     return 20 * math.log10(PIXEL_MAX) - 10 * math.log10(mse)
+
