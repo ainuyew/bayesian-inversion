@@ -23,26 +23,33 @@ def unzip(zip_path):
             files.append((name, dcm))
     return files
 
-def add_poisson_noise(image, N0=30000, slice_thickness=.03, epsilon=5, filter_name='ramp'):
+def add_noise(image, N0=30000, slice_thickness=.03, epsilon=5, filter_name='ramp'):
+    assert len(image.shape) == 2
+
+    image_rescaled = (image - image.min())/(image.max() - image.min())
 
     theta = np.linspace(0., 180., max(image.shape), endpoint=False)
-    sinogram = radon(image, theta=theta, circle=False)
+    sinogram = radon(image_rescaled, theta=theta, circle=False)
 
     sinogram_in = N0 * np.exp(-sinogram * slice_thickness)
-    sinogram_noisy = np.random.poisson(sinogram_in)
+    sinogram_noisy = np.random.poisson(sinogram_in) # this has to within [0., 1.]
     sinogram_out = -np.log(sinogram_noisy/N0)/slice_thickness
 
     # update inf values
     idx = np.isinf(sinogram_out)
     sinogram_out[idx] = -np.log(epsilon/N0)/slice_thickness
 
-    fbp_image = iradon(sinogram_out, theta=theta, filter_name=filter_name, circle=False)
-    return fbp_image
+    # what is the standard deviation for eletrical noise?
+    gaussian_noise = np.random.normal(0., 1e-5, sinogram_out.shape)
+
+    reconstructed_image = iradon(sinogram_out + gaussian_noise, theta=theta, filter_name=filter_name, circle=False)
+
+    return reconstructed_image * (image.max() - image.min()) + image.min()
 
 def add_simple_noise(image, peak=1):
-    image_in = (image - image.min())/(image.max() - image.min()) * 255
-    noise_mask = np.random.poisson(image_in/255 * peak)/peak * 255
-    return image_in + noise_mask
+    image_rescaled = (image - image.min())/(image.max() - image.min())
+    image_noise = np.random.poisson(image_rescaled * 255 * peak)/peak / 255
+    return np.clip(image_noise, 0., 1.) * (image.max() - image.min()) + image.min()
 
 def get_pixel_arrays(file_paths):
     pixel_arrays = []
@@ -53,14 +60,12 @@ def get_pixel_arrays(file_paths):
 
         # convert to HU
         hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
+        densities = (hu_values + 1000.)/1000.
 
         # resize image to run with smaller ram/vram
-        #hu_values = resize(hu_values, (hu_values.shape[0] // 4, hu_values.shape[1] // 4), anti_aliasing=True)
+        #densities = resize(densities, (densities.shape[0] // 4, densities.shape[1] // 4), anti_aliasing=True)
 
-        # rescale 1/1000 HU
-        hu_values = hu_values / 1000.
-
-        pixel_arrays.append(hu_values.reshape((hu_values.shape[0], hu_values.shape[1], 1)))
+        pixel_arrays.append(densities.reshape((densities.shape[0], densities.shape[1], 1)))
 
     return pixel_arrays
 
