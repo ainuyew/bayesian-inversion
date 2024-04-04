@@ -60,10 +60,10 @@ def get_pixel_arrays(file_paths):
 
         # convert to HU
         hu_values = ima.RescaleSlope * pixel_array + ima.RescaleIntercept
-        densities = (hu_values + 1000.)/1000.
+        densities = utils.hu_to_densities(hu_values)
 
         # resize image to run with smaller ram/vram
-        #densities = resize(densities, (densities.shape[0] // 4, densities.shape[1] // 4), anti_aliasing=True)
+        densities = resize(densities, (densities.shape[0] // 4, densities.shape[1] // 4), anti_aliasing=True)
 
         pixel_arrays.append(densities.reshape((densities.shape[0], densities.shape[1], 1)))
 
@@ -72,6 +72,7 @@ def get_pixel_arrays(file_paths):
 def get_data(folder, patients, slice_start=0, slice_end=-1):
     fd_data = []
     ld_data = []
+    uld_data = []
     fd_path=f'{folder}/full_3mm'
     ld_path=f'{folder}/quarter_3mm'
 
@@ -83,11 +84,15 @@ def get_data(folder, patients, slice_start=0, slice_end=-1):
 
         fd_pixel_arrays = get_pixel_arrays(fd_file_paths)
         ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
+        uld_pixel_arrays = []
+        for pixel_array in fd_pixel_arrays:
+            uld_pixel_arrays.append(add_noise(pixel_array.reshape((pixel_array.shape[0], pixel_array.shape[1]))).reshape((pixel_array.shape)))
 
         fd_data[0:0] = fd_pixel_arrays # concatenate two lists
         ld_data[0:0] = ld_pixel_arrays
+        uld_data[0:0] = uld_pixel_arrays
 
-    return np.array(list(zip(fd_data, ld_data)))
+    return np.array(list(zip(fd_data, ld_data, uld_data)))
 
 def get_training_data(folder, slice_start=0, slice_end=-1):
     fd_path=f'{folder}/full_3mm'

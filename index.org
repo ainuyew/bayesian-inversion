@@ -427,14 +427,15 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
     train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
     test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
-    fd_data, ld_data = test[36]
+    fd_data, ld_data, uld_data = test[36]
 
   ww = 350
   wl = 50
 
-  fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4.5), sharex=True, sharey=True)
-  figures = [('Ground Truth', ax1, utils.window_image(fd_data * 1000 - 1000, ww, wl)),
-             ('Low Dose Image', ax2, utils.window_image(ld_data * 1000 - 1000, ww, wl))]
+  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
+  figures = [('Ground Truth', ax1, utils.window_densities(fd_data, ww, wl)),
+           ('Low Dose Image', ax2, utils.window_densities(ld_data, ww, wl)),
+             ('Ultra Low Dose Image', ax3, utils.window_densities(uld_data, ww, wl))]
 
   _ = fig.tight_layout()
   for title, ax, figure in figures:
@@ -447,11 +448,9 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
 #+RESULTS:
 :RESULTS:
-: loading patient data: 100% 9/9 [00:07<00:00,  1.22it/s]
-:
-: loading patient data: 100% 1/1 [00:00<00:00,  1.48it/s]
-:
-[[file:./.ob-jupyter/65d0e15acde4044765db32a059d11e6c094bd1b1.png]]
+: loading patient data: 100% 9/9 [06:46<00:00, 45.22s/it]
+: loading patient data: 100% 1/1 [00:40<00:00, 40.39s/it]
+iiiiii[[file:./.ob-jupyter/f849fb6a149730b95eb5719a08130964c0075c96.png]]
 :END:
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
@@ -472,12 +471,12 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
   fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
   _ = fig.tight_layout()
 
-  fd_img = utils.window_image(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])) * 1000 - 1000, ww, wl)
-  ld_img = utils.window_image(ld_data * 1000 - 1000, ww, wl)
-  uld_fbp = utils.window_image(mayo.add_noise(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), N0=30000) * 1000 - 1000, ww, wl)
+  fd_img = utils.window_densities(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), ww, wl)
+  ld_img = utils.window_densities(ld_data, ww, wl)
+  uld_fbp = utils.window_densities(mayo.add_noise(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), N0=30000), ww, wl)
   figures = [('Normal Dose', axs[0, 0], fd_img),
              ('Low Dose', axs[0, 1], ld_img),
-             ('Image + Noise', axs[1, 0], utils.window_image(mayo.add_simple_noise(fd_data, peak=2) * 1000 - 1000, ww, wl)),
+             ('Image + Noise', axs[1, 0], utils.window_densities(mayo.add_simple_noise(fd_data, peak=2), ww, wl)),
              ('Image = Projection + Noise', axs[1, 1], uld_fbp),
              ]
 
@@ -488,13 +487,13 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
   plt.show()
 
-  print(f'{np.mean(uld_fbp - fd_img)} vs {np.mean(ld_img - fd_img)}')
+  print(f'{np.mean((uld_fbp - fd_img)**2)} vs {np.mean((ld_img - fd_img)**2)}')
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/b71baf084087f3e079a53fd1a7ec20a98b4faaec.png]]
-: -0.3526370895365686 vs 0.04130843026318939
+[[file:./.ob-jupyter/cbcf569695253f911c43e73dde7826eff42d6ff3.png]]
+: 524.9045843745162 vs 9874.421876490394
 :END:
 * DDPM
 DDPM specific parameters.

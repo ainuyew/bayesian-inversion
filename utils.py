@@ -176,11 +176,15 @@ def window_image(x: np.ndarray, ww: int, wl: int, out_range=(0., 255.)) -> np.nd
     out_lower, out_upper = out_range
     return (clipped - lower)/ww * (out_upper - out_lower) + out_lower
 
+def window_densities(x: np.ndarray, ww: int, wl:int, out_range=(0., 255.)) -> np.ndarray:
+    return window_image(densities_to_hu(x), ww, wl, out_range)
+
 def signal_to_noise_ratio(x, axis=0, ddof=0):
     x = np.asanyarray(x)
     m = x.mean(axis)
     sd = x.std(axis=axis, ddof=ddof)
     return np.where(sd == 0, 0, m/sd)
+
 def peak_signal_to_noise_ratio(x, y):
     x = np.asanyarray(x)
     y = np.asanyarray(y)
@@ -190,3 +194,9 @@ def peak_signal_to_noise_ratio(x, y):
     PIXEL_MAX = 255.0
     return 20 * math.log10(PIXEL_MAX) - 10 * math.log10(mse)
 
+
+def hu_to_densities(hu_values):
+    return hu_values/1000. +1.
+
+def densities_to_hu(densities):
+    return (densities - 1.) * 1000.
