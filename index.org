@@ -77,7 +77,7 @@ We examine some full dose samples from the training images.
 [[file:./.ob-jupyter/60530960a5453d2cbb849a8caa49c64bf7d7626b.png]]
 :END:
 
-
+** scikit-image
 We apply forward projection on the batch to obtain their respective sinograms (Radon transform).
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -152,6 +152,7 @@ We now apply filtered back projection to reconstruct the original image using th
 [[file:./.ob-jupyter/bf8b320469e40ad55860556539c903c1f6c6ffe0.png]]
 :END:
 
+** Ultra Low Dose Simulation
 We adopt the second method of generating low dose images from normal dose images [cite:@elhamiasl2020_low-dose_x-ray_ct]. Specifically, we generate virtual projections from rescontructed full dose images, simulate noise due to a lower dosage, and reconstruct the image.
 ([cite:@yi2018_sharpness-aware_low_dose]) $N\sim \text{Poisson}(N_0 \exp(-y)) + \text{Gaussian}(0, \sigma_e^2)$ where $N_0$ is the intensity of the x-ray source, $y$ is the sinogram data, and $\sigma_e^2$ represent the eletrical noise standard deviation.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
@@ -184,7 +185,7 @@ We adopt the second method of generating low dose images from normal dose images
 [[file:./.ob-jupyter/a2c5cd91c793b7ab083a82fbbf06731021691179.png]]
 :END:
 
-For simplicity, let's add Poisson noise to the full dose image.
+For simplicity, let's add Poisson noise directly to the full dose image.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import numpy as np
@@ -203,6 +204,7 @@ For simplicity, let's add Poisson noise to the full dose image.
 [[file:./.ob-jupyter/867b134dcccbb5541e76d3d5c51efc23c8aac807.png]]
 :END:
 
+** Preprocessing data for training
 Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and compare a few samples.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -239,176 +241,6 @@ Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and com
 : noise: 0.00468
 [[file:./.ob-jupyter/87b4f042c9bbc291a64110740ae09645af97d617.png]]
 :END:
-
-Next, we explore if we can reconstruct images from Mayo's full dose projections (Helical scans), and how it compares with the provided images reconstructed using commercial software (weighted FBP).
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  #from pydicom import dcmread
-  #import matplotlib.pyplot as plt
-  #import numpy as np
-  #from pathlib import Path
-
-  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'
-
-  dcm_path=f'{path}/Training_Projection_Data/L067'
-  dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
-
-  import odl
-  from odl.contrib.datasets.ct import mayo
-
-  mayo_dir = f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
-
-  # Load reference reconstruction
-  #volume_folder = mayo_dir + '/Training Cases/L067/full_1mm_sharp'
-  volume_folder = mayo_dir + '/Training_Image_Data/3mm B30/full_3mm/L067/full_3mm'
-  partition, volume = mayo.load_reconstruction(volume_folder)
-
-  # Load a subset of the projection data
-  #data_folder = mayo_dir + '/Training Cases/L067/full_DICOM-CT-PD'
-  data_folder = mayo_dir + '/Training_Projection_Data/L067/DICOM-CT-PD_FD'
-  geometry, proj_data = mayo.load_projections(data_folder,
-                                            indices=slice(20000, 28000))
-
-  # Reconstruction space and ray transform
-  space = odl.uniform_discr_frompartition(partition, dtype='float32')
-  ray_trafo = odl.tomo.RayTransform(space, geometry)
-
-  # Define FBP operator
-  fbp = odl.tomo.fbp_op(ray_trafo, padding=True)
-
-  # Tam-Danielsson window to handle redundant data
-  td_window = odl.tomo.tam_danielson_window(ray_trafo, n_pi=3)
-
-  # Calculate FBP reconstruction
-  fbp_result = fbp(td_window * proj_data)
-
-  # Compare the computed recon to reference reconstruction (coronal slice)
-  ref = space.element(volume)
-  fbp_result.show('Recon (coronal)', clim=[0.7, 1.3])
-  ref.show('Reference (coronal)', clim=[0.7, 1.3])
-  (ref - fbp_result).show('Diff (coronal)', clim=[-0.1, 0.1])
-
-  # Also visualize sagittal slice (note that we only used a subset)
-  coords = [0, None, None]
-  fbp_result.show('Recon (sagittal)', clim=[0.7, 1.3], coords=coords)
-  ref.show('Reference (sagittal)', clim=[0.7, 1.3], coords=coords)
-  (ref - fbp_result).show('Diff (sagittal)', clim=[-0.1, 0.1], coords=coords)
-
-  #n = 3
-  #sinograms=[]
-  #sinogram_batch = np.random.choice(dcm_files, size=n**2, replace=False)
-  #fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
-  #_ = fig.tight_layout()
-  #for i, sinogram_file in enumerate(sinogram_batch):
-  #    dcm = dcmread(sinogram_file)
-  #    sinogram = dcm.pixel_array
-  #    sinograms.append(sinogram)
-  #    ax = axs[i // n][i % n]
-  #    ax.imshow(sinogram, cmap=plt.cm.Greys_r,)
-  #plt.show()
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-# [goto error]
-#+begin_example
-  
-  ImportErrorTraceback (most recent call last)
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
-       14 try:
-  ---> 15     from numpy import take_along_axis
-       16 except ImportError:  # pragma: no cover
-
-  ImportError: cannot import name 'take_along_axis'
-
-  During handling of the above exception, another exception occurred:
-
-  AttributeErrorTraceback (most recent call last)
-  <ipython-input-1-c46f9b485a61> in <module>
-        9 dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
-       10 
-  ---> 11 import odl
-       12 from odl.contrib.datasets.ct import mayo
-       13 
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/__init__.py in <module>
-       64 from . import phantom
-       65 from . import solvers
-  ---> 66 from . import tomo
-       67 from . import trafos
-       68 from . import ufunc_ops
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/__init__.py in <module>
-       17 __all__ += geometry.__all__
-       18 
-  ---> 19 from .backends import *
-       20 __all__ += backends.__all__
-       21 
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/__init__.py in <module>
-       22 __all__ += astra_cuda.__all__
-       23 
-  ---> 24 from .skimage_radon import *
-       25 __all__ += skimage_radon.__all__
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/skimage_radon.py in <module>
-       12 import numpy as np
-       13 try:
-  ---> 14     import skimage
-       15     SKIMAGE_AVAILABLE = True
-       16 except ImportError:
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/__init__.py in <module>
-      125 
-      126     # All skimage root imports go here
-  --> 127     from .util.dtype import (img_as_float32,
-      128                              img_as_float64,
-      129                              img_as_float,
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/__init__.py in <module>
-        4 from .shape import view_as_blocks, view_as_windows
-        5 from .noise import random_noise
-  ----> 6 from .apply_parallel import apply_parallel
-        7 
-        8 from .arraycrop import crop
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/apply_parallel.py in <module>
-        6 
-        7 try:
-  ----> 8     import dask.array as da
-        9     dask_available = True
-       10 except ImportError:
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/__init__.py in <module>
-        1 try:
-  ----> 2     from .blockwise import blockwise, atop
-        3     from .core import (
-        4         Array,
-        5         block,
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/blockwise.py in <module>
-      286 
-      287 
-  --> 288 from .core import new_da_object
-  
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/core.py in <module>
-       20 import numpy as np
-       21 
-  ---> 22 from . import chunk
-       23 from .. import config, compute
-       24 from ..base import (
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
-       15     from numpy import take_along_axis
-       16 except ImportError:  # pragma: no cover
-  ---> 17     take_along_axis = npcompat.take_along_axis
-       18 
-       19 
-
-  AttributeError: module 'dask.array.numpy_compat' has no attribute 'take_along_axis'
-#+end_example
-:END:
-
 We preprocess the data to 512x512x1 and window to a range of 350 HU and centered about 50 HU. Importantly, the data is saved in HDF5 format. This allows us to not load the entire training or test data into memory and use the data in a similar fashion to numpy arrays.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -495,6 +327,117 @@ iiiiii[[file:./.ob-jupyter/f849fb6a149730b95eb5719a08130964c0075c96.png]]
 [[file:./.ob-jupyter/cbcf569695253f911c43e73dde7826eff42d6ff3.png]]
 : 524.9045843745162 vs 9874.421876490394
 :END:
+
+** ODL examples
+Next, we explore if we can reconstruct images from Mayo's full dose projections (Helical scans), and how it compares with the provided images reconstructed using commercial software (weighted FBP).
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  #from pydicom import dcmread
+  import matplotlib.pyplot as plt
+  import numpy as np
+  from pathlib import Path
+
+  home_path = str(Path.home())
+  path=home_path + '/Documents/data/Mayo_Grand_Challenge/Patient_Data'
+
+  dcm_path=path + '/Training_Projection_Data/L067'
+  dcm_fd_path=dcm_path + '/DICOM-CT-PD_FD'
+
+  import odl
+  from odl.contrib.datasets.ct import mayo
+
+  mayo_dir = home_path + '/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
+
+  # Load reference reconstruction
+  #volume_folder = mayo_dir + '/Training Cases/L067/full_1mm_sharp'
+  volume_folder = mayo_dir + '/Training_Image_Data/3mm B30/full_3mm/L067/full_3mm'
+  partition, volume = mayo.load_reconstruction(volume_folder)
+
+  # Load a subset of the projection data
+  #data_folder = mayo_dir + '/Training Cases/L067/full_DICOM-CT-PD'
+  data_folder = mayo_dir + '/Training_Projection_Data/L067/DICOM-CT-PD_FD'
+  geometry, proj_data = mayo.load_projections(data_folder,
+                                            indices=slice(20000, 28000))
+
+  # Reconstruction space and ray transform
+  space = odl.uniform_discr_frompartition(partition, dtype='float32')
+  ray_trafo = odl.tomo.RayTransform(space, geometry)
+
+  # Define FBP operator
+  fbp = odl.tomo.fbp_op(ray_trafo, padding=True)
+
+  # Tam-Danielsson window to handle redundant data
+  td_window = odl.tomo.tam_danielson_window(ray_trafo, n_pi=3)
+
+  # Calculate FBP reconstruction
+  fbp_result = fbp(td_window * proj_data)
+
+  # Compare the computed recon to reference reconstruction (coronal slice)
+  ref = space.element(volume)
+  fbp_result.show('Recon (coronal)', clim=[0.7, 1.3])
+  ref.show('Reference (coronal)', clim=[0.7, 1.3])
+  (ref - fbp_result).show('Diff (coronal)', clim=[-0.1, 0.1])
+
+  # Also visualize sagittal slice (note that we only used a subset)
+  coords = [0, None, None]
+  fbp_result.show('Recon (sagittal)', clim=[0.7, 1.3], coords=coords)
+  ref.show('Reference (sagittal)', clim=[0.7, 1.3], coords=coords)
+  (ref - fbp_result).show('Diff (sagittal)', clim=[-0.1, 0.1], coords=coords)
+
+  #n = 3
+  #sinograms=[]
+  #sinogram_batch = np.random.choice(dcm_files, size=n**2, replace=False)
+  #fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  #_ = fig.tight_layout()
+  #for i, sinogram_file in enumerate(sinogram_batch):
+  #    dcm = dcmread(sinogram_file)
+  #    sinogram = dcm.pixel_array
+  #    sinograms.append(sinogram)
+  #    ax = axs[i // n][i % n]
+  #    ax.imshow(sinogram, cmap=plt.cm.Greys_r,)
+  #plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: loading volume data: 100%|██████████| 223/223 [00:02<00:00, 75.90it/s]
+: Loading projection data:   0%|          | 0/8000 [00:00<?, ?it/s]
+# [goto error]
+#+begin_example
+  [0;31m[0m
+  [0;31mAttributeError[0mTraceback (most recent call last)
+  [0;32m<ipython-input-9-8dc0f17f65e8>[0m in [0;36m<module>[0;34m()[0m
+  [1;32m     24[0m [0mdata_folder[0m [0;34m=[0m [0mmayo_dir[0m [0;34m+[0m [0;34m'/Training_Projection_Data/L067/DICOM-CT-PD_FD'[0m[0;34m[0m[0m
+  [1;32m     25[0m geometry, proj_data = mayo.load_projections(data_folder,
+  [0;32m---> 26[0;31m                                           indices=slice(20000, 28000))
+  [0m[1;32m     27[0m [0;34m[0m[0m
+  [1;32m     28[0m [0;31m# Reconstruction space and ray transform[0m[0;34m[0m[0;34m[0m[0m
+
+  [0;32m~/miniconda3/envs/odlenv/lib/python3.5/site-packages/odl/contrib/datasets/ct/mayo.py[0m in [0;36mload_projections[0;34m(folder, indices)[0m
+  [1;32m    102[0m         [0mcoefficient[0m [0;34m([0m[0mg[0m[0;34m/[0m[0mcm[0m[0;34m^[0m[0;36m3[0m[0;34m)[0m[0;34m.[0m [0mIts[0m [0munit[0m [0;32mis[0m [0mthus[0m [0mg[0m[0;34m/[0m[0mcm[0m[0;34m^[0m[0;36m2.[0m[0;34m[0m[0m
+  [1;32m    103[0m     """
+  [0;32m--> 104[0;31m     [0mdatasets[0m[0;34m,[0m [0mdata_array[0m [0;34m=[0m [0m_read_projections[0m[0;34m([0m[0mfolder[0m[0;34m,[0m [0mindices[0m[0;34m)[0m[0;34m[0m[0m
+  [0m[1;32m    105[0m [0;34m[0m[0m
+  [1;32m    106[0m     [0;31m# Get the angles[0m[0;34m[0m[0;34m[0m[0m
+
+  [0;32m~/miniconda3/envs/odlenv/lib/python3.5/site-packages/odl/contrib/datasets/ct/mayo.py[0m in [0;36m_read_projections[0;34m(folder, indices)[0m
+  [1;32m     57[0m         [0mrows[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mNumberofDetectorRows[0m[0;34m[0m[0m
+  [1;32m     58[0m         [0mcols[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mNumberofDetectorColumns[0m[0;34m[0m[0m
+  [0;32m---> 59[0;31m         [0mhu_factor[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mHUCalibrationFactor[0m[0;34m[0m[0m
+  [0m[1;32m     60[0m         [0mrescale_intercept[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mRescaleIntercept[0m[0;34m[0m[0m
+  [1;32m     61[0m         [0mrescale_slope[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mRescaleSlope[0m[0;34m[0m[0m
+
+  [0;32m~/miniconda3/envs/odlenv/lib/python3.5/site-packages/dicom/dataset.py[0m in [0;36m__getattr__[0;34m(self, name)[0m
+  [1;32m    255[0m         [0;32mif[0m [0mtag[0m [0;32mnot[0m [0;32min[0m [0mself[0m[0;34m:[0m[0;34m[0m[0m
+  [1;32m    256[0m             raise AttributeError("Dataset does not have attribute "
+  [0;32m--> 257[0;31m                                  "'{0:s}'.".format(name))
+  [0m[1;32m    258[0m         [0;32melse[0m[0;34m:[0m  [0;31m# do have that dicom data_element[0m[0;34m[0m[0m
+  [1;32m    259[0m             [0;32mreturn[0m [0mself[0m[0;34m[[0m[0mtag[0m[0;34m][0m[0;34m.[0m[0mvalue[0m[0;34m[0m[0m
+
+  [0;31mAttributeError[0m: Dataset does not have attribute 'HUCalibrationFactor'.
+#+end_example
+:END:
+
 * DDPM
 DDPM specific parameters.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2

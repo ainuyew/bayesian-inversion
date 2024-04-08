@@ -108,10 +108,9 @@ def get_test_data(folder, slice_start=0, slice_end=-1):
     return get_data(folder, patients[-n:], slice_start, slice_end)
 
 
+
 def main():
-    #path='/Volumes/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
     path='/Users/huiyuanchua/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-    #path='/media/huiyuanchua/SEAGATE_1TB/Huiyuan/projects/Mayo_Grand_Challenge/Patient_Data/Training_Projection_Data/L067/DICOM-CT-PD_QD.zip'
     training_data = get_training_data(path)
     print(len(training_data))
 
