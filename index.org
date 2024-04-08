@@ -280,11 +280,9 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
 #+RESULTS:
 :RESULTS:
-: loading patient data: 100% 9/9 [02:06<00:00, 14.09s/it]
-:
-: loading patient data: 100% 1/1 [00:13<00:00, 13.79s/it]
-:
-[[file:./.ob-jupyter/16e9299ba775d0018298479689bbe5cfd80d6d6c.png]]
+: loading patient data: 100% 9/9 [03:54<00:00, 26.03s/it]
+: loading patient data: 100% 1/1 [00:22<00:00, 22.29s/it]
+[[file:./.ob-jupyter/57878659e054be1078d3413b3b2cb6ce33eae3b5.png]]
 :END:
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
