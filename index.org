@@ -494,17 +494,8 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
 #+RESULTS:
 :RESULTS:
-# [goto error]
-: [0;31m---------------------------------------------------------------------------[0m
-: [0;31mValueError[0m                                Traceback (most recent call last)
-: Cell [0;32mIn[1], line 9[0m
-: [1;32m      6[0m [38;5;28;01mimport[39;00m [38;5;21;01mmayo[39;00m[38;5;241m,[39m [38;5;21;01mutils[39;00m
-: [1;32m      8[0m [38;5;28;01mwith[39;00m h5py[38;5;241m.[39mFile([38;5;124mf[39m[38;5;124m'[39m[38;5;132;01m{[39;00mPath[38;5;241m.[39mhome()[38;5;132;01m}[39;00m[38;5;124m/Documents/data/mayo.hdf5[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mr[39m[38;5;124m'[39m) [38;5;28;01mas[39;00m hf:
-: [0;32m----> 9[0m   fd_data, ld_data [38;5;241m=[39m hf[[38;5;124m'[39m[38;5;124mtest[39m[38;5;124m'[39m][[38;5;241m36[39m]
-: [1;32m     11[0m ww [38;5;241m=[39m [38;5;241m350[39m
-: [1;32m     12[0m wl [38;5;241m=[39m [38;5;241m50[39m
-:
-: [0;31mValueError[0m: too many values to unpack (expected 2)
+[[file:./.ob-jupyter/d1c62665f280ec90b5d045028d51131ae1e8c148.png]]
+: 510.11683248438385 vs 9874.421876490394
 :END:
 * DDPM
 DDPM specific parameters.
