@@ -116,7 +116,7 @@ def main():
         state, epoch_start, step = utils.restore_checkpoint(CHECKPOINT_DIR)
         print(f'restore checkpoint from epoch {epoch_start} and step {step}')
     else:
-        state = utils.create_training_state(key=key2)
+        state = utils.create_training_state(key=key2, param_shape=(1, 128, 128, 2))
         #utils.save_checkpoint(CHECKPOINT_DIR, state, epoch_start, step)
 
     with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:

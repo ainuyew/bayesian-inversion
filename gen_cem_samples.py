@@ -52,7 +52,7 @@ def main(n_samples=1000):
 
     # use the best params
     file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
-    cem_state = utils.create_training_state(params_file=file_path)
+    cem_state = utils.create_training_state(params_file=file_path, param_shape=(1, 128, 128, 2))
     print(f'using parameters from epoch {epoch} with loss {loss}')
 
     ts = utils.exponential_time_schedule(T, K)
@@ -63,7 +63,7 @@ def main(n_samples=1000):
     # create empty samples HDF5 to store samples
     samples_path = f'{PROJECT_DIR}/cem_samples.hdf5'
     with h5py.File(samples_path, 'w') as hf:
-        samples = hf.create_dataset('samples', data=np.zeros((n_samples, 512, 512, 1)), compression='gzip', chunks=True)
+        samples = hf.create_dataset('samples', data=np.zeros((n_samples, 128, 128, 1)), compression='gzip', chunks=True)
 
     for i in tqdm(range(n_samples // BATCH_SIZE)):
         # generate x_0 from noise
@@ -76,7 +76,7 @@ def main(n_samples=1000):
 SEED=42
 T=10.
 K=1000
-BATCH_SIZE = 10
+BATCH_SIZE = 5
 PROJECT_DIR=os.path.abspath('.')
 
 if __name__ == '__main__':

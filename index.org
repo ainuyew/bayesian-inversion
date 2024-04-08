@@ -77,7 +77,7 @@ We examine some full dose samples from the training images.
 [[file:./.ob-jupyter/60530960a5453d2cbb849a8caa49c64bf7d7626b.png]]
 :END:
 
-
+** scikit-image
 We apply forward projection on the batch to obtain their respective sinograms (Radon transform).
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -152,6 +152,7 @@ We now apply filtered back projection to reconstruct the original image using th
 [[file:./.ob-jupyter/bf8b320469e40ad55860556539c903c1f6c6ffe0.png]]
 :END:
 
+** Ultra Low Dose Simulation
 We adopt the second method of generating low dose images from normal dose images [cite:@elhamiasl2020_low-dose_x-ray_ct]. Specifically, we generate virtual projections from rescontructed full dose images, simulate noise due to a lower dosage, and reconstruct the image.
 ([cite:@yi2018_sharpness-aware_low_dose]) $N\sim \text{Poisson}(N_0 \exp(-y)) + \text{Gaussian}(0, \sigma_e^2)$ where $N_0$ is the intensity of the x-ray source, $y$ is the sinogram data, and $\sigma_e^2$ represent the eletrical noise standard deviation.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
@@ -184,7 +185,7 @@ We adopt the second method of generating low dose images from normal dose images
 [[file:./.ob-jupyter/a2c5cd91c793b7ab083a82fbbf06731021691179.png]]
 :END:
 
-For simplicity, let's add Poisson noise to the full dose image.
+For simplicity, let's add Poisson noise directly to the full dose image.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import numpy as np
@@ -203,6 +204,7 @@ For simplicity, let's add Poisson noise to the full dose image.
 [[file:./.ob-jupyter/867b134dcccbb5541e76d3d5c51efc23c8aac807.png]]
 :END:
 
+** Preprocessing data for training
 Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and compare a few samples.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
@@ -239,24 +241,112 @@ Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and com
 : noise: 0.00468
 [[file:./.ob-jupyter/87b4f042c9bbc291a64110740ae09645af97d617.png]]
 :END:
+We preprocess the data to 512x512x1 and window to a range of 350 HU and centered about 50 HU. Importantly, the data is saved in HDF5 format. This allows us to not load the entire training or test data into memory and use the data in a similar fashion to numpy arrays.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  from pathlib import Path
+  import matplotlib.pyplot as plt
 
+  import mayo
+  import utils
+
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path)
+  test_data = mayo.get_test_data(path)
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'w') as hf:
+
+    train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
+    test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
+    fd_data, ld_data, uld_data = test[36]
+
+  ww = 350
+  wl = 50
+
+  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
+  figures = [('Ground Truth', ax1, utils.window_densities(fd_data, ww, wl)),
+           ('Low Dose Image', ax2, utils.window_densities(ld_data, ww, wl)),
+             ('Ultra Low Dose Image', ax3, utils.window_densities(uld_data, ww, wl))]
+
+  _ = fig.tight_layout()
+  for title, ax, figure in figures:
+    ax.grid(None)
+    ax.set_title(title)
+    ax.imshow(figure, cmap=plt.cm.Greys_r)
+
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: loading patient data: 100% 9/9 [03:54<00:00, 26.03s/it]
+: loading patient data: 100% 1/1 [00:22<00:00, 22.29s/it]
+[[file:./.ob-jupyter/57878659e054be1078d3413b3b2cb6ce33eae3b5.png]]
+:END:
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  import matplotlib.pyplot as plt
+  from pathlib import Path
+  import numpy as np
+
+  import mayo, utils
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    fd_data, ld_data, _ = hf['test'][36]
+
+  ww = 350
+  wl = 50
+
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+
+  fd_img = utils.window_densities(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), ww, wl)
+  ld_img = utils.window_densities(ld_data, ww, wl)
+  uld_fbp = utils.window_densities(mayo.add_noise(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), N0=30000), ww, wl)
+  figures = [('Normal Dose', axs[0, 0], fd_img),
+             ('Low Dose', axs[0, 1], ld_img),
+             ('Image + Noise', axs[1, 0], utils.window_densities(mayo.add_simple_noise(fd_data, peak=2), ww, wl)),
+             ('Image = Projection + Noise', axs[1, 1], uld_fbp),
+             ]
+
+  for title, ax, image in figures:
+    ax.grid(None)
+    ax.set_title(title)
+    ax.imshow(image, cmap=plt.cm.Greys_r)
+
+  plt.show()
+
+  print(f'{np.mean((uld_fbp - fd_img)**2)} vs {np.mean((ld_img - fd_img)**2)}')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/d1c62665f280ec90b5d045028d51131ae1e8c148.png]]
+: 510.11683248438385 vs 9874.421876490394
+:END:
+
+** ODL examples
 Next, we explore if we can reconstruct images from Mayo's full dose projections (Helical scans), and how it compares with the provided images reconstructed using commercial software (weighted FBP).
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   #from pydicom import dcmread
-  #import matplotlib.pyplot as plt
-  #import numpy as np
-  #from pathlib import Path
+  import matplotlib.pyplot as plt
+  import numpy as np
+  from pathlib import Path
 
-  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'
+  home_path = str(Path.home())
+  path=home_path + '/Documents/data/Mayo_Grand_Challenge/Patient_Data'
 
-  dcm_path=f'{path}/Training_Projection_Data/L067'
-  dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
+  dcm_path=path + '/Training_Projection_Data/L067'
+  dcm_fd_path=dcm_path + '/DICOM-CT-PD_FD'
 
   import odl
   from odl.contrib.datasets.ct import mayo
 
-  mayo_dir = f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
+  mayo_dir = home_path + '/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
 
   # Load reference reconstruction
   #volume_folder = mayo_dir + '/Training Cases/L067/full_1mm_sharp'
@@ -310,193 +400,44 @@ Next, we explore if we can reconstruct images from Mayo's full dose projections 
 
 #+RESULTS:
 :RESULTS:
+: loading volume data: 100%|██████████| 223/223 [00:02<00:00, 75.90it/s]
+: Loading projection data:   0%|          | 0/8000 [00:00<?, ?it/s]
 # [goto error]
 #+begin_example
-  
-  ImportErrorTraceback (most recent call last)
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
-       14 try:
-  ---> 15     from numpy import take_along_axis
-       16 except ImportError:  # pragma: no cover
+  [0;31m[0m
+  [0;31mAttributeError[0mTraceback (most recent call last)
+  [0;32m<ipython-input-9-8dc0f17f65e8>[0m in [0;36m<module>[0;34m()[0m
+  [1;32m     24[0m [0mdata_folder[0m [0;34m=[0m [0mmayo_dir[0m [0;34m+[0m [0;34m'/Training_Projection_Data/L067/DICOM-CT-PD_FD'[0m[0;34m[0m[0m
+  [1;32m     25[0m geometry, proj_data = mayo.load_projections(data_folder,
+  [0;32m---> 26[0;31m                                           indices=slice(20000, 28000))
+  [0m[1;32m     27[0m [0;34m[0m[0m
+  [1;32m     28[0m [0;31m# Reconstruction space and ray transform[0m[0;34m[0m[0;34m[0m[0m
 
-  ImportError: cannot import name 'take_along_axis'
+  [0;32m~/miniconda3/envs/odlenv/lib/python3.5/site-packages/odl/contrib/datasets/ct/mayo.py[0m in [0;36mload_projections[0;34m(folder, indices)[0m
+  [1;32m    102[0m         [0mcoefficient[0m [0;34m([0m[0mg[0m[0;34m/[0m[0mcm[0m[0;34m^[0m[0;36m3[0m[0;34m)[0m[0;34m.[0m [0mIts[0m [0munit[0m [0;32mis[0m [0mthus[0m [0mg[0m[0;34m/[0m[0mcm[0m[0;34m^[0m[0;36m2.[0m[0;34m[0m[0m
+  [1;32m    103[0m     """
+  [0;32m--> 104[0;31m     [0mdatasets[0m[0;34m,[0m [0mdata_array[0m [0;34m=[0m [0m_read_projections[0m[0;34m([0m[0mfolder[0m[0;34m,[0m [0mindices[0m[0;34m)[0m[0;34m[0m[0m
+  [0m[1;32m    105[0m [0;34m[0m[0m
+  [1;32m    106[0m     [0;31m# Get the angles[0m[0;34m[0m[0;34m[0m[0m
 
-  During handling of the above exception, another exception occurred:
+  [0;32m~/miniconda3/envs/odlenv/lib/python3.5/site-packages/odl/contrib/datasets/ct/mayo.py[0m in [0;36m_read_projections[0;34m(folder, indices)[0m
+  [1;32m     57[0m         [0mrows[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mNumberofDetectorRows[0m[0;34m[0m[0m
+  [1;32m     58[0m         [0mcols[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mNumberofDetectorColumns[0m[0;34m[0m[0m
+  [0;32m---> 59[0;31m         [0mhu_factor[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mHUCalibrationFactor[0m[0;34m[0m[0m
+  [0m[1;32m     60[0m         [0mrescale_intercept[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mRescaleIntercept[0m[0;34m[0m[0m
+  [1;32m     61[0m         [0mrescale_slope[0m [0;34m=[0m [0mdataset[0m[0;34m.[0m[0mRescaleSlope[0m[0;34m[0m[0m
 
-  AttributeErrorTraceback (most recent call last)
-  <ipython-input-1-c46f9b485a61> in <module>
-        9 dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
-       10 
-  ---> 11 import odl
-       12 from odl.contrib.datasets.ct import mayo
-       13 
+  [0;32m~/miniconda3/envs/odlenv/lib/python3.5/site-packages/dicom/dataset.py[0m in [0;36m__getattr__[0;34m(self, name)[0m
+  [1;32m    255[0m         [0;32mif[0m [0mtag[0m [0;32mnot[0m [0;32min[0m [0mself[0m[0;34m:[0m[0;34m[0m[0m
+  [1;32m    256[0m             raise AttributeError("Dataset does not have attribute "
+  [0;32m--> 257[0;31m                                  "'{0:s}'.".format(name))
+  [0m[1;32m    258[0m         [0;32melse[0m[0;34m:[0m  [0;31m# do have that dicom data_element[0m[0;34m[0m[0m
+  [1;32m    259[0m             [0;32mreturn[0m [0mself[0m[0;34m[[0m[0mtag[0m[0;34m][0m[0;34m.[0m[0mvalue[0m[0;34m[0m[0m
 
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/__init__.py in <module>
-       64 from . import phantom
-       65 from . import solvers
-  ---> 66 from . import tomo
-       67 from . import trafos
-       68 from . import ufunc_ops
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/__init__.py in <module>
-       17 __all__ += geometry.__all__
-       18 
-  ---> 19 from .backends import *
-       20 __all__ += backends.__all__
-       21 
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/__init__.py in <module>
-       22 __all__ += astra_cuda.__all__
-       23 
-  ---> 24 from .skimage_radon import *
-       25 __all__ += skimage_radon.__all__
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/skimage_radon.py in <module>
-       12 import numpy as np
-       13 try:
-  ---> 14     import skimage
-       15     SKIMAGE_AVAILABLE = True
-       16 except ImportError:
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/__init__.py in <module>
-      125 
-      126     # All skimage root imports go here
-  --> 127     from .util.dtype import (img_as_float32,
-      128                              img_as_float64,
-      129                              img_as_float,
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/__init__.py in <module>
-        4 from .shape import view_as_blocks, view_as_windows
-        5 from .noise import random_noise
-  ----> 6 from .apply_parallel import apply_parallel
-        7 
-        8 from .arraycrop import crop
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/apply_parallel.py in <module>
-        6 
-        7 try:
-  ----> 8     import dask.array as da
-        9     dask_available = True
-       10 except ImportError:
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/__init__.py in <module>
-        1 try:
-  ----> 2     from .blockwise import blockwise, atop
-        3     from .core import (
-        4         Array,
-        5         block,
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/blockwise.py in <module>
-      286 
-      287 
-  --> 288 from .core import new_da_object
-  
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/core.py in <module>
-       20 import numpy as np
-       21 
-  ---> 22 from . import chunk
-       23 from .. import config, compute
-       24 from ..base import (
-
-  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
-       15     from numpy import take_along_axis
-       16 except ImportError:  # pragma: no cover
-  ---> 17     take_along_axis = npcompat.take_along_axis
-       18 
-       19 
-
-  AttributeError: module 'dask.array.numpy_compat' has no attribute 'take_along_axis'
+  [0;31mAttributeError[0m: Dataset does not have attribute 'HUCalibrationFactor'.
 #+end_example
 :END:
 
-We preprocess the data to 512x512x1 and window to a range of 350 HU and centered about 50 HU. Importantly, the data is saved in HDF5 format. This allows us to not load the entire training or test data into memory and use the data in a similar fashion to numpy arrays.
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import h5py
-  from pathlib import Path
-  import matplotlib.pyplot as plt
-
-  import mayo
-  import utils
-
-  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
-  training_data = mayo.get_training_data(path)
-  test_data = mayo.get_test_data(path)
-
-  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'w') as hf:
-
-    train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
-    test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
-    fd_data, ld_data, uld_data = test[36]
-
-  ww = 350
-  wl = 50
-
-  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
-  figures = [('Ground Truth', ax1, utils.window_densities(fd_data, ww, wl)),
-           ('Low Dose Image', ax2, utils.window_densities(ld_data, ww, wl)),
-             ('Ultra Low Dose Image', ax3, utils.window_densities(uld_data, ww, wl))]
-
-  _ = fig.tight_layout()
-  for title, ax, figure in figures:
-    ax.grid(None)
-    ax.set_title(title)
-    ax.imshow(figure, cmap=plt.cm.Greys_r)
-
-  plt.show()
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-: loading patient data: 100% 9/9 [02:06<00:00, 14.09s/it]
-:
-: loading patient data: 100% 1/1 [00:13<00:00, 13.79s/it]
-:
-[[file:./.ob-jupyter/16e9299ba775d0018298479689bbe5cfd80d6d6c.png]]
-:END:
-
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import h5py
-  import matplotlib.pyplot as plt
-  from pathlib import Path
-  import numpy as np
-
-  import mayo, utils
-
-  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
-    fd_data, ld_data, _ = hf['test'][36]
-
-  ww = 350
-  wl = 50
-
-  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
-  _ = fig.tight_layout()
-
-  fd_img = utils.window_densities(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), ww, wl)
-  ld_img = utils.window_densities(ld_data, ww, wl)
-  uld_fbp = utils.window_densities(mayo.add_noise(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), N0=30000), ww, wl)
-  figures = [('Normal Dose', axs[0, 0], fd_img),
-             ('Low Dose', axs[0, 1], ld_img),
-             ('Image + Noise', axs[1, 0], utils.window_densities(mayo.add_simple_noise(fd_data, peak=2), ww, wl)),
-             ('Image = Projection + Noise', axs[1, 1], uld_fbp),
-             ]
-
-  for title, ax, image in figures:
-    ax.grid(None)
-    ax.set_title(title)
-    ax.imshow(image, cmap=plt.cm.Greys_r)
-
-  plt.show()
-
-  print(f'{np.mean((uld_fbp - fd_img)**2)} vs {np.mean((ld_img - fd_img)**2)}')
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-[[file:./.ob-jupyter/d1c62665f280ec90b5d045028d51131ae1e8c148.png]]
-: 510.11683248438385 vs 9874.421876490394
-:END:
 * DDPM
 DDPM specific parameters.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
