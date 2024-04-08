@@ -280,9 +280,11 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
 #+RESULTS:
 :RESULTS:
-: loading patient data: 100% 9/9 [06:46<00:00, 45.22s/it]
-: loading patient data: 100% 1/1 [00:40<00:00, 40.39s/it]
-iiiiii[[file:./.ob-jupyter/f849fb6a149730b95eb5719a08130964c0075c96.png]]
+: loading patient data: 100% 9/9 [02:06<00:00, 14.09s/it]
+:
+: loading patient data: 100% 1/1 [00:13<00:00, 13.79s/it]
+:
+[[file:./.ob-jupyter/16e9299ba775d0018298479689bbe5cfd80d6d6c.png]]
 :END:
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
@@ -295,7 +297,7 @@ iiiiii[[file:./.ob-jupyter/f849fb6a149730b95eb5719a08130964c0075c96.png]]
   import mayo, utils
 
   with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
-    fd_data, ld_data = hf['test'][36]
+    fd_data, ld_data, _ = hf['test'][36]
 
   ww = 350
   wl = 50
@@ -324,8 +326,17 @@ iiiiii[[file:./.ob-jupyter/f849fb6a149730b95eb5719a08130964c0075c96.png]]
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/cbcf569695253f911c43e73dde7826eff42d6ff3.png]]
-: 524.9045843745162 vs 9874.421876490394
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mValueError[0m                                Traceback (most recent call last)
+: Cell [0;32mIn[1], line 9[0m
+: [1;32m      6[0m [38;5;28;01mimport[39;00m [38;5;21;01mmayo[39;00m[38;5;241m,[39m [38;5;21;01mutils[39;00m
+: [1;32m      8[0m [38;5;28;01mwith[39;00m h5py[38;5;241m.[39mFile([38;5;124mf[39m[38;5;124m'[39m[38;5;132;01m{[39;00mPath[38;5;241m.[39mhome()[38;5;132;01m}[39;00m[38;5;124m/Documents/data/mayo.hdf5[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mr[39m[38;5;124m'[39m) [38;5;28;01mas[39;00m hf:
+: [0;32m----> 9[0m   fd_data, ld_data [38;5;241m=[39m hf[[38;5;124m'[39m[38;5;124mtest[39m[38;5;124m'[39m][[38;5;241m36[39m]
+: [1;32m     11[0m ww [38;5;241m=[39m [38;5;241m350[39m
+: [1;32m     12[0m wl [38;5;241m=[39m [38;5;241m50[39m
+:
+: [0;31mValueError[0m: too many values to unpack (expected 2)
 :END:
 
 ** ODL examples

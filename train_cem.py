@@ -57,7 +57,7 @@ def fit(state, training_data, time_schedule, key, batch_size, n_epoch, patience,
             x_0_batch = training_data[sorted(perm), ...]
 
             x_0_fd = x_0_batch[:, 0]
-            x_0_ld = x_0_batch[:, 1]
+            x_0_ld = x_0_batch[:, 2]
 
             # regenerate a new random keys
             key, key2, key3 = random.split(key, 3)
@@ -135,7 +135,7 @@ PROJECT_DIR=os.path.abspath('.')
 CHECKPOINT_DIR=os.path.abspath('/tmp/cem')
 LOSS_LOG= f'{PROJECT_DIR}/cem_loss_log.npy'
 SEED=42
-BATCH_SIZE=1
+BATCH_SIZE=10
 N_EPOCH=100
 T = 10.
 K = 200

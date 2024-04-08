@@ -58,7 +58,7 @@ def main(n_samples=1000):
     ts = utils.exponential_time_schedule(T, K)
 
     with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
-        fd_data, ld_data = hf['test'][36]
+        fd_data, _, uld_data = hf['test'][36]
 
     # create empty samples HDF5 to store samples
     samples_path = f'{PROJECT_DIR}/cem_samples.hdf5'
@@ -68,7 +68,7 @@ def main(n_samples=1000):
     for i in tqdm(range(n_samples // BATCH_SIZE)):
         # generate x_0 from noise
         key, subkey = random.split(key)
-        x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
+        x_0_tilde = sample(cem_state, uld_data, BATCH_SIZE, ts, subkey)
 
         with h5py.File(samples_path, 'a') as hf:
             hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
@@ -76,7 +76,7 @@ def main(n_samples=1000):
 SEED=42
 T=10.
 K=1000
-BATCH_SIZE = 1
+BATCH_SIZE = 10
 PROJECT_DIR=os.path.abspath('.')
 
 if __name__ == '__main__':

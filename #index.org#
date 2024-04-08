@@ -1,0 +1,1156 @@
+#+TITLE: Examination of DDPM and CEM on Bayesian Inversion problems.
+#+setupfile: ~/.emacs.d/setupfile.org
+
+* Problem Statement
+This is an investigation into the use of diffusion models to solve the problem discussed in [cite:@adler2018_deep_bayesian_inversion]. Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ([cite:@adler2018_deep_bayesian_inversion]) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
+
+In a CT scan of a subjectsbegy2pts, multiple 2D projections are generated for each angle of projection. Projections are created by the forward projection algorithm,and measures the attenutation (reduction in intensity) of the x-ray beam (cast no the subject towards the deector). A sinogram consist of mutiple projections stacked together. We can then reconstruct a 3D image of the subject of interest through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
+
+In [cite:@adler2018_deep_bayesian_inversion], we train two neural networks (GAN) to assist in the analysis of ultra low dose CT scans. An ultra low dose CT scan is simulated from a normal dose CT scan image. Projections are sampled from the normal dose image and Poisson noise is added to the projections. The ultra low dose CT image is then reconstructed using filtered back projection (FBP). The first neural network (deep posterior sampling) produces (high quality) sample images from the ultra low dose images. The second neural network (deep direct estimation) returns the mean and variance (of what the normal dose should be) given an ultra lose dose image.
+
+[cite:@moen2021_low-dose_ct_image] provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections by adding Poisson noise.
+
+** Filtered Back Projection (FBP)
+Found a site on filtered back projection https://howradiologyworks.com/filtered-backprojection-fbp-illustrated-guide-for-radiologic-technologists/#:~:text=Back%20projection%20is%20the%20process,Filtered%20Backprojection%20and%20Iterative%20Reconstruction. A traditional x-ray scan gives us a 2d image of a subject of interest from a view (usually in front of the patient for a chest scan). One 2d image does not provide us a very good understanding of the subject. A forward projection algorithm instead takes multiple 2d images of a the subject from multiple and different angles/views. The end results are _sinograms_. Each line/row in a sinogram corresponds to 2d image taken of the subject at particular view. A sinogram is so named because each point in the subject corresponds traces a sinusoid curve.
+
+Given knowledge of how a forward projection works, we can reverse the process (which we call back projection) to reconstruct an image of the subject. Because the back projection (BP) is performed one view at a time, the resulting reconstructed image is a blurred image (https://www.youtube.com/watch?v=YvYIkbiRMy0). To remedy this problem, we can apply a sharpening step (or image deblurring). This image deblurring can be applied in three different manner:
+1. BP projection to image then apply image de-blur
+2. De-blur projection then BP to image
+3. De-blur projection, BP to image, then finally de-blur again
+The second option (called Filtered Back Projection or FBP) is the most common as it is fast and robust. Back projection is the process of mapping the data from the detector space to the image space, while forward projection is the process of mapping the data in the image space to the detector space.
+
+* Data
+We use data from 2016 Low Dose CT Grand Challenge (https://www.aapm.org/grandchallenge/lowdosect/#testDatasets). Training data is downloaded from box at https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h. (https://www.imagewisely.org/Imaging-Modalities/Computed-Tomography/Image-Reconstruction-Techniques) The data contains images reconstructed using two reconstruction kernels B30 and D45. Reconstruction kernels (also called “filter” or “algorithm”) affects the image quality. There is a tradeoff between spatial resolution and noise. A smoother kernel generates images with lower noise but with reduced spatial resolution. A sharper kernel generates images with higher spatial resolution, but increases the image noise. Spatial resolution in CT is the ability to differentiate objects of different density. A high spatial resolution is important to distinguish objects that are close to one another.
+
+Patient_Data directory contains the reconstructed images and projections (in DICOM-CT-PD format) of the CT scans.
+Ancillary_Information contains detailed documentation on the file format DICOM-CT-PD (vendor neutral DICOM format), and lesion information.
+
+Full (normal) and associate quarter (low) dose projections (.DCM) and associated reconstructed images (.IMA) are provided by Mayo clinic. The low dose projections are simulated from the normal dose projections [cite:@mccollough2017_low-dose_ct_detection]. The training data contain data from ten patients while the testing data contain data from twenty patients. For each patient and dosage level, there are ~48k projection files and 225 reconstructed images. Each 225 reconstructed images are 2D images which forms a 3D view of the patient. Mayo has provided reconstructed images using two thickness (1mm and 3mm) and two kernels (B30 and D45). Hence, for every patient, we have a total of 2 x 2 x 2 x 225 = 1800 image files.
+
+In the Helical scan, pitch refers to the movement of the table in the z-axis relative to the height of the detector. A helical pitch of 1.0 means the table will move a distance equal to the height of the detector resulting in scans which do not overlap and do not have gaps. A helical pitch of 0.5 means the table will move a distance equal to half the height of the detector resulting in scans that overlap. This is usually done to improve spatial resolution.
+
+We examine some full dose samples from the training images.
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  from skimage.transform import iradon
+  from pydicom import dcmread
+  import matplotlib.pyplot as plt
+  import numpy as np
+  from pathlib import Path
+  import tqdm
+
+  import utils
+
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'
+
+  ima_path=f'{path}/Training_Image_Data/3mm B30'
+  ima_fd_path=f'{ima_path}/full_3mm/L067/full_3mm'
+
+  pathlist = Path(ima_fd_path).rglob('*.IMA')
+  ima_files = [ima for ima in pathlist]
+
+  ww = 350
+  wl = 50
+  n = 3
+  images=[]
+  ima_batch = np.random.choice(ima_files, size=n**2, replace=False)
+  fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  for i, ima_file in tqdm.tqdm(enumerate(ima_batch)):
+      ima = dcmread(ima_file)
+      image = ima.pixel_array
+
+      # convert to HU
+      hu_values = ima.RescaleSlope * image + ima.RescaleIntercept
+      densities = (hu_values + 1000)/1000
+      images.append(densities)
+      ax = axs[i // n][i % n]
+      #ax.imshow(image, cmap=plt.cm.Greys_r,)
+      ax.grid(None)
+      ax.imshow(utils.window_image(hu_values, ww, wl), cmap=plt.cm.Greys_r,)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: 9it [00:00, 285.00it/s]
+:
+[[file:./.ob-jupyter/60530960a5453d2cbb849a8caa49c64bf7d7626b.png]]
+:END:
+
+
+We apply forward projection on the batch to obtain their respective sinograms (Radon transform).
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from skimage.data import shepp_logan_phantom
+  from skimage.transform import radon, rescale
+  import tqdm
+
+  sinograms = []
+  fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  for i, image in tqdm.tqdm(enumerate(images)):
+      ax = axs[i // n][i % n]
+
+      theta = np.linspace(0., 180., max(image.shape), endpoint=False)
+      sinogram = radon(image, theta=theta, circle=False)
+      sinograms.append(sinogram)
+      dx, dy = 0.5 * 180.0 / max(image.shape), 0.5 / sinogram.shape[0]
+      ax.grid(None)
+      ax.imshow(sinogram, cmap=plt.cm.Greys_r,
+                 extent=(-dx, 180.0 + dx, -dy, sinogram.shape[0] + dy),
+                 aspect='auto')
+
+      ax.imshow(sinogram)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: 9it [00:20,  2.24s/it]
+:
+[[file:./.ob-jupyter/dc176021f0a9c60e509498d6f9d407a2ec448a35.png]]
+:END:
+
+We now apply filtered back projection to reconstruct the original image using the filter "ramp".
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  from skimage.transform import iradon
+  from pydicom import dcmread
+  import matplotlib.pyplot as plt
+
+  import utils
+
+  sinogram = sinograms[4]
+  image = images[4] * 1000 - 1000
+  reconstruction_fbp = iradon(sinogram, theta=theta, filter_name='ramp', circle=False) * 1000 - 1000
+  error = reconstruction_fbp - image
+  print(f'FBP rms reconstruction error: {np.sqrt(np.mean(error**2)):.3g}')
+
+  ww = 350
+  wl = 50
+
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  ax1.set_title("Ground Truth")
+  ax1.grid(None)
+  ax1.imshow(utils.window_image(image, ww, wl), cmap=plt.cm.Greys_r)
+  ax2.set_title("FBP image")
+  ax2.grid(None)
+  ax2.imshow(utils.window_image(reconstruction_fbp, ww, wl), cmap=plt.cm.Greys_r)
+  ax3.set_title("Reconstruction error\nFiltered back projection")
+  ax3.grid(None)
+  ax3.imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: FBP rms reconstruction error: 10.6
+[[file:./.ob-jupyter/bf8b320469e40ad55860556539c903c1f6c6ffe0.png]]
+:END:
+
+We adopt the second method of generating low dose images from normal dose images [cite:@elhamiasl2020_low-dose_x-ray_ct]. Specifically, we generate virtual projections from rescontructed full dose images, simulate noise due to a lower dosage, and reconstruct the image.
+([cite:@yi2018_sharpness-aware_low_dose]) $N\sim \text{Poisson}(N_0 \exp(-y)) + \text{Gaussian}(0, \sigma_e^2)$ where $N_0$ is the intensity of the x-ray source, $y$ is the sinogram data, and $\sigma_e^2$ represent the eletrical noise standard deviation.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import numpy as np
+
+  N0 = 100000 # x-ray influx
+  slice_thickness = 0.03 # in cm
+  epsilon = 5 # small number > 0 that reflects smallest possible detected photon count
+  sinogramCT = N0 * np.exp(-sinogram * slice_thickness)
+  sinogram_noisy = np.random.poisson(sinogramCT) # poissrnd(sinogram)
+  sinogram_out = -np.log(sinogram_noisy/N0)/slice_thickness
+
+  idx = np.isinf(sinogram_out)
+  sinogram_out[idx] = -np.log(epsilon/N0)/slice_thickness
+  # we need to update infinity values to -log(epsilon/N0)/0.0625 where epsilon =5
+
+  reconstruction_fbp = iradon(sinogram_out, theta=theta, filter_name='ramp') * 1000 - 1000
+
+  #plt.imshow(sinogram_out)
+  plt.imshow(utils.window_image(reconstruction_fbp, ww, wl), cmap=plt.cm.Greys_r)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: /var/folders/bc/r2l4k0lx343ds2rjs_2mjns00000gn/T/ipykernel_1478/3904578395.py:8: RuntimeWarning: divide by zero encountered in log
+:   sinogram_out = -np.log(sinogram_noisy/N0)/slice_thickness
+: <matplotlib.image.AxesImage at 0x1764d8ed0>
+#+attr_org: :width 432
+[[file:./.ob-jupyter/a2c5cd91c793b7ab083a82fbbf06731021691179.png]]
+:END:
+
+For simplicity, let's add Poisson noise to the full dose image.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import numpy as np
+  import utils
+  PEAK = 1.
+  image_in = utils.window_image(image, ww, wl)
+  noise_mask = np.random.poisson(image_in/255. * PEAK)/ PEAK * 255.
+  image_noisy = np.clip(image_in + noise_mask, 0., 255.)
+  plt.imshow(image_noisy, cmap=plt.cm.Greys_r)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: <matplotlib.image.AxesImage at 0x1505d5190>
+#+attr_org: :width 432
+[[file:./.ob-jupyter/867b134dcccbb5541e76d3d5c51efc23c8aac807.png]]
+:END:
+
+Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and compare a few samples.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import mayo
+  import numpy as np
+  import matplotlib.pyplot as plt
+
+  import utils
+
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path, 112, 113) # pull the middle slices of each patient
+  fd_ima, qd_ima = training_data[len(training_data) // 2]
+  noise = fd_ima - qd_ima
+
+  print(f'noise: {np.sqrt(np.mean(noise**2)):.3g}')
+
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = ax1.set_title("full dose image")
+  _ = ax1.imshow(utils.normalize_image(fd_ima), cmap=plt.cm.Greys_r)
+  _ = ax2.set_title("quarter dose image")
+  _ = ax2.imshow(utils.normalize_image(qd_ima), cmap=plt.cm.Greys_r)
+  _ = ax3.set_title("noise")
+  _ = ax3.imshow(noise, cmap=plt.cm.Greys_r, **imkwargs)
+  plt.show()
+
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: loading patient data: 100% 10/10 [00:00<00:00, 65.98it/s]
+:
+: noise: 0.00468
+[[file:./.ob-jupyter/87b4f042c9bbc291a64110740ae09645af97d617.png]]
+:END:
+
+Next, we explore if we can reconstruct images from Mayo's full dose projections (Helical scans), and how it compares with the provided images reconstructed using commercial software (weighted FBP).
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  #from pydicom import dcmread
+  #import matplotlib.pyplot as plt
+  #import numpy as np
+  #from pathlib import Path
+
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'
+
+  dcm_path=f'{path}/Training_Projection_Data/L067'
+  dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
+
+  import odl
+  from odl.contrib.datasets.ct import mayo
+
+  mayo_dir = f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data'  # replace with your local folder
+
+  # Load reference reconstruction
+  #volume_folder = mayo_dir + '/Training Cases/L067/full_1mm_sharp'
+  volume_folder = mayo_dir + '/Training_Image_Data/3mm B30/full_3mm/L067/full_3mm'
+  partition, volume = mayo.load_reconstruction(volume_folder)
+
+  # Load a subset of the projection data
+  #data_folder = mayo_dir + '/Training Cases/L067/full_DICOM-CT-PD'
+  data_folder = mayo_dir + '/Training_Projection_Data/L067/DICOM-CT-PD_FD'
+  geometry, proj_data = mayo.load_projections(data_folder,
+                                            indices=slice(20000, 28000))
+
+  # Reconstruction space and ray transform
+  space = odl.uniform_discr_frompartition(partition, dtype='float32')
+  ray_trafo = odl.tomo.RayTransform(space, geometry)
+
+  # Define FBP operator
+  fbp = odl.tomo.fbp_op(ray_trafo, padding=True)
+
+  # Tam-Danielsson window to handle redundant data
+  td_window = odl.tomo.tam_danielson_window(ray_trafo, n_pi=3)
+
+  # Calculate FBP reconstruction
+  fbp_result = fbp(td_window * proj_data)
+
+  # Compare the computed recon to reference reconstruction (coronal slice)
+  ref = space.element(volume)
+  fbp_result.show('Recon (coronal)', clim=[0.7, 1.3])
+  ref.show('Reference (coronal)', clim=[0.7, 1.3])
+  (ref - fbp_result).show('Diff (coronal)', clim=[-0.1, 0.1])
+
+  # Also visualize sagittal slice (note that we only used a subset)
+  coords = [0, None, None]
+  fbp_result.show('Recon (sagittal)', clim=[0.7, 1.3], coords=coords)
+  ref.show('Reference (sagittal)', clim=[0.7, 1.3], coords=coords)
+  (ref - fbp_result).show('Diff (sagittal)', clim=[-0.1, 0.1], coords=coords)
+
+  #n = 3
+  #sinograms=[]
+  #sinogram_batch = np.random.choice(dcm_files, size=n**2, replace=False)
+  #fig, axs = plt.subplots(n, n, figsize=(3 *n, 3 * n), sharex=True, sharey=True)
+  #_ = fig.tight_layout()
+  #for i, sinogram_file in enumerate(sinogram_batch):
+  #    dcm = dcmread(sinogram_file)
+  #    sinogram = dcm.pixel_array
+  #    sinograms.append(sinogram)
+  #    ax = axs[i // n][i % n]
+  #    ax.imshow(sinogram, cmap=plt.cm.Greys_r,)
+  #plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+# [goto error]
+#+begin_example
+  
+  ImportErrorTraceback (most recent call last)
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
+       14 try:
+  ---> 15     from numpy import take_along_axis
+       16 except ImportError:  # pragma: no cover
+
+  ImportError: cannot import name 'take_along_axis'
+
+  During handling of the above exception, another exception occurred:
+
+  AttributeErrorTraceback (most recent call last)
+  <ipython-input-1-c46f9b485a61> in <module>
+        9 dcm_fd_path=f'{dcm_path}/DICOM-CT-PD_FD'
+       10 
+  ---> 11 import odl
+       12 from odl.contrib.datasets.ct import mayo
+       13 
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/__init__.py in <module>
+       64 from . import phantom
+       65 from . import solvers
+  ---> 66 from . import tomo
+       67 from . import trafos
+       68 from . import ufunc_ops
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/__init__.py in <module>
+       17 __all__ += geometry.__all__
+       18 
+  ---> 19 from .backends import *
+       20 __all__ += backends.__all__
+       21 
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/__init__.py in <module>
+       22 __all__ += astra_cuda.__all__
+       23 
+  ---> 24 from .skimage_radon import *
+       25 __all__ += skimage_radon.__all__
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/odl/tomo/backends/skimage_radon.py in <module>
+       12 import numpy as np
+       13 try:
+  ---> 14     import skimage
+       15     SKIMAGE_AVAILABLE = True
+       16 except ImportError:
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/__init__.py in <module>
+      125 
+      126     # All skimage root imports go here
+  --> 127     from .util.dtype import (img_as_float32,
+      128                              img_as_float64,
+      129                              img_as_float,
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/__init__.py in <module>
+        4 from .shape import view_as_blocks, view_as_windows
+        5 from .noise import random_noise
+  ----> 6 from .apply_parallel import apply_parallel
+        7 
+        8 from .arraycrop import crop
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/skimage/util/apply_parallel.py in <module>
+        6 
+        7 try:
+  ----> 8     import dask.array as da
+        9     dask_available = True
+       10 except ImportError:
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/__init__.py in <module>
+        1 try:
+  ----> 2     from .blockwise import blockwise, atop
+        3     from .core import (
+        4         Array,
+        5         block,
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/blockwise.py in <module>
+      286 
+      287 
+  --> 288 from .core import new_da_object
+  
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/core.py in <module>
+       20 import numpy as np
+       21 
+  ---> 22 from . import chunk
+       23 from .. import config, compute
+       24 from ..base import (
+
+  ~/miniconda3/envs/odlenv/lib/python3.6/site-packages/dask/array/chunk.py in <module>
+       15     from numpy import take_along_axis
+       16 except ImportError:  # pragma: no cover
+  ---> 17     take_along_axis = npcompat.take_along_axis
+       18 
+       19 
+
+  AttributeError: module 'dask.array.numpy_compat' has no attribute 'take_along_axis'
+#+end_example
+:END:
+
+We preprocess the data to 512x512x1 and window to a range of 350 HU and centered about 50 HU. Importantly, the data is saved in HDF5 format. This allows us to not load the entire training or test data into memory and use the data in a similar fashion to numpy arrays.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  from pathlib import Path
+  import matplotlib.pyplot as plt
+
+  import mayo
+  import utils
+
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path)
+  test_data = mayo.get_test_data(path)
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'w') as hf:
+
+    train = hf.create_dataset('train', data=training_data, compression="gzip", chunks=True)
+    test = hf.create_dataset('test', data=test_data, compression="gzip", chunks=True)
+    fd_data, ld_data, uld_data = test[36]
+
+  ww = 350
+  wl = 50
+
+  fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
+  figures = [('Ground Truth', ax1, utils.window_densities(fd_data, ww, wl)),
+           ('Low Dose Image', ax2, utils.window_densities(ld_data, ww, wl)),
+             ('Ultra Low Dose Image', ax3, utils.window_densities(uld_data, ww, wl))]
+
+  _ = fig.tight_layout()
+  for title, ax, figure in figures:
+    ax.grid(None)
+    ax.set_title(title)
+    ax.imshow(figure, cmap=plt.cm.Greys_r)
+
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: loading patient data: 100% 9/9 [02:06<00:00, 14.09s/it]
+:
+: loading patient data: 100% 1/1 [00:13<00:00, 13.79s/it]
+:
+[[file:./.ob-jupyter/16e9299ba775d0018298479689bbe5cfd80d6d6c.png]]
+:END:
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  import matplotlib.pyplot as plt
+  from pathlib import Path
+  import numpy as np
+
+  import mayo, utils
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    fd_data, ld_data, _ = hf['test'][36]
+
+  ww = 350
+  wl = 50
+
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+
+  fd_img = utils.window_densities(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), ww, wl)
+  ld_img = utils.window_densities(ld_data, ww, wl)
+  uld_fbp = utils.window_densities(mayo.add_noise(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), N0=30000), ww, wl)
+  figures = [('Normal Dose', axs[0, 0], fd_img),
+             ('Low Dose', axs[0, 1], ld_img),
+             ('Image + Noise', axs[1, 0], utils.window_densities(mayo.add_simple_noise(fd_data, peak=2), ww, wl)),
+             ('Image = Projection + Noise', axs[1, 1], uld_fbp),
+             ]
+
+  for title, ax, image in figures:
+    ax.grid(None)
+    ax.set_title(title)
+    ax.imshow(image, cmap=plt.cm.Greys_r)
+
+  plt.show()
+
+  print(f'{np.mean((uld_fbp - fd_img)**2)} vs {np.mean((ld_img - fd_img)**2)}')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/d1c62665f280ec90b5d045028d51131ae1e8c148.png]]
+: 510.11683248438385 vs 9874.421876490394
+:END:
+* DDPM
+DDPM specific parameters.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import os
+
+  SEED=42
+  MIN_BETA, MAX_BETA = 1e-4, 0.02
+  K = 200
+  N_EPOCH = 30
+  BATCH_SIZE = 10
+  PROJECT_DIR=os.path.abspath('.')
+#+end_src
+
+#+RESULTS:
+
+** Training
+First, let's make sure we have the correct shapes for training data inputs and predictions.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+    from jax import random
+    import jax.numpy as jnp
+    import numpy as np
+    from pathlib import Path
+
+    import utils
+    import mayo
+
+    key = random.PRNGKey(42)
+    state = utils.create_training_state(key=key)
+    path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+    training_data = mayo.get_training_data(path, 112, 113)
+
+    x_0_fd = training_data[:, 0]
+    x_0_ld = training_data[:, 1]
+    x_k = jnp.concatenate((x_0_fd, x_0_ld), axis=-1)
+    n = training_data.shape[0]
+    k = random.choice(key, np.arange(200), shape=(n,))
+    predictions = state.apply_fn(state.params, x_k, k)
+    print(f'training input shape (x_t, t): {x_k.shape}, {k.shape}')
+    print(f'predictions shape (x_0): {predictions.shape}')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: loading patient data: 100% 10/10 [00:00<00:00, 76.08it/s]
+:
+: training input shape (x_t, t): (10, 128, 128, 2) {(10,)}
+: predictions shape (x_0): (10, 128, 128, 1)
+:END:
+
+Training is performed via a python script [[file:train_ddpm.py]]. We examine the average epoch loss with the following code:
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import pandas as pd
+  import matplotlib.pyplot as plt
+  import seaborn as sns
+  import os
+
+  import utils
+
+  PROJECT_DIR=os.path.abspath('.')
+  ddpm_loss_log = utils.load_loss_log(f'{PROJECT_DIR}/ddpm_loss_log.npy')
+
+  # plot losses
+  df = pd.DataFrame([(int(x), float(y)) for x, _, y in ddpm_loss_log], columns=['epoch', 'loss'])
+  sns.relplot(df, x='epoch', y='loss', kind='line')
+
+  _ = plt.tight_layout()
+  _ = plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 484
+[[file:./.ob-jupyter/98b946f3ee6dbe5becc443cc009687eff61363d4.png]]
+:END:
+
+** Sampling
+We sample images from the trained DDPM model.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import matplotlib.pyplot as plt
+  import optax
+  from jax import random
+  import jax.numpy as jnp
+  from tqdm import tqdm
+  import numpy as np
+
+  import utils
+  import mayo
+
+  def sample(state, condition, n, betas, key):
+    # random white noise X_T
+    key, subkey = random.split(key)
+    x_k = random.normal(subkey, shape=(n, condition.shape[0], condition.shape[1], 1))
+
+    #dts = np.array([ts[i] - ts[i-1] for i in range(1, steps+1)])
+    #betas = 1- np.exp(-dts)
+    alphas = 1 - betas
+    alpha_bars = jnp.cumprod(alphas)
+    #alpha_bars = jnp.array([alphas[:i+1].prod() for i in range(len(alphas))]) # workaround for metal problem with jnp.cumprod
+
+    condition = np.repeat(condition.reshape((1, condition.shape[0], condition.shape[1], 1)), n, axis=0)
+
+    # sample in reverse from T=10 to 0.0 in evenly distributed steps
+    #for i in tqdm(range(steps)[::-1]):
+    for k in range(len(betas))[::-1]:
+      alpha = alphas[k]
+      beta = betas[k]
+      alpha_bar_k = alpha_bars[k]
+
+      key, subkey = random.split(key)
+      z = jnp.where(k > 1, random.normal(subkey, shape=x_k.shape), jnp.zeros_like(x_k))
+      sigma_k = jnp.sqrt(beta) # option 1; see DDPM 3.2
+      #sigma_k = jnp.sqrt((1-alpha_bars[k-1])/(1 - alpha_bar_k) * beta) # option 2; see DDPM 3.2
+
+      inputs = jnp.concatenate((x_k, condition), axis=-1)
+
+      x_k = 1/jnp.sqrt(alpha) * (x_k - beta/jnp.sqrt(1 - alpha_bar_k) * state.apply_fn(state.params, inputs, k * jnp.ones((x_k.shape[0], )))) + sigma_k * z
+
+      #x_k = jnp.clip(x_k, -1., 1.) # should we clip ...
+      x_t = jnp.clip(x_t, -3., 3.)
+      #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
+
+    return x_k
+
+  key = random.PRNGKey(SEED)
+
+  # use the best params
+  file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/ddpm_params_*.npy')
+  ddpm_state = utils.create_training_state(params_file=f'{PROJECT_DIR}/ddpm_params_{epoch}_{step}_{loss}.npy')
+  print(f'using parameters from epoch {epoch} with loss {loss}')
+
+  betas = jnp.linspace(MIN_BETA, MAX_BETA, K)
+  path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+  training_data = mayo.get_training_data(path, 112, 113)
+  n = (len(training_data) // 10) * 9
+  test_data = training_data[n:]
+  test_data = []
+  n_samples = 1000
+
+  fd_data, ld_data = training_data[0]
+  result = np.zeros(fd_data.shape)
+
+  for i in tqdm(range(n_samples // BATCH_SIZE)):
+    # generate x_0 from noise
+    key, subkey = random.split(key)
+    x_0_tilde = sample(ddpm_state, ld_data, BATCH_SIZE, betas, subkey)
+
+    result = result + np.sum(x_0_tilde, axis=0)
+
+  result = result / n_samples
+  error = fd_data - result
+  print(f'error: {np.mean(error)}')
+
+  # plot and compare last sample
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.normalize_image_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.normalize_image_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("DDPM")
+  _ = axs[1, 0].imshow(utils.normalize_image_to_greyscale(result), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("error")
+  _ = axs[1, 1].imshow(error, cmap=plt.cm.Greys_r, **imkwargs)
+
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+begin_example
+  Platform 'METAL' is experimental and not all JAX functionality may be correctly supported!
+  2024-03-23 12:48:02.264962: W pjrt_plugin/src/mps_client.cc:563] WARNING: JAX Apple GPU support is experimental and not all JAX functionality is correctly supported!
+  Metal device set to: Apple M1
+  using parameters from epoch 22 with loss 0.00825
+  loading patient data: 100% 10/10 [00:00<00:00, 59.47it/s]
+
+  100% 200/200 [03:55<00:00,  1.18s/it]
+
+  100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:54<00:00,  1.17s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:51<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:48<00:00,  1.14s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:53<00:00,  1.17s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:49<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:52<00:00,  1.16s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+100% 200/200 [03:50<00:00,  1.15s/it]
+  error: 0.11948700249195099
+#+end_example
+[[file:./.ob-jupyter/da8b230284e5503497e7e30a76f4e73bb3cc5842.png]]
+:END:
+
+We show the results from samples generated externally.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  from pathlib import Path
+  import matplotlib.pyplot as plt
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    fd_data, ld_data = hf['test'][36]
+
+  with h5py.File(f'{Path.home()}/Documents/data/ddpm_samples.hdf5', 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
+
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.normalize_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.normalize_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(utils.normalize_to_greyscale(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
+
+  plt.show()
+#+end_src
+
+* CEM
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import os
+
+  SEED=42
+  T=10.
+  K=1000
+  BATCH_SIZE = 10
+  PROJECT_DIR=os.path.abspath('.')
+#+end_src
+
+#+RESULTS:
+** Training
+Training is performed via a python script [[file:train_cem.py]]. We examine the average epoch loss with the following code:
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import pandas as pd
+  import matplotlib.pyplot as plt
+  import seaborn as sns
+
+  import utils
+
+  cem_loss_log = utils.load_loss_log(f'{PROJECT_DIR}/cem_loss_log.npy')
+
+  # plot losses
+  df = pd.DataFrame([(int(x), float(y)) for x, _, y in cem_loss_log], columns=['epoch', 'loss'])
+  sns.relplot(df, x='epoch', y='loss', kind='line')
+
+  _ = plt.tight_layout()
+  _ = plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: /Users/huiyuanchua/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+:   with pd.option_context('mode.use_inf_as_na', True):
+: /Users/huiyuanchua/miniconda3/envs/mlenv-metal/lib/python3.11/site-packages/seaborn/_oldcore.py:1119: FutureWarning: use_inf_as_na option is deprecated and will be removed in a future version. Convert inf values to NaN before operating instead.
+:   with pd.option_context('mode.use_inf_as_na', True):
+#+attr_org: :width 484
+[[file:./.ob-jupyter/9116398acd8b24680bfcc5c9c8c5b48242340955.png]]
+:END:
+
+** Sampling
+We sample images from the trained CEM model.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import matplotlib.pyplot as plt
+  import optax
+  from jax import random
+  import jax.numpy as jnp
+  from tqdm import tqdm
+  import numpy as np
+  import h5py
+  from pathlib import Path
+
+
+  import utils
+  from unet import Unet
+  import mayo
+
+  def sample(state, condition, n, ts, key):
+      # random white noise X_T
+      key, subkey = random.split(key)
+      x_t = random.normal(subkey, shape=(n, condition.shape[0], condition.shape[1], 1))
+
+      condition = np.repeat(condition.reshape((1, condition.shape[0], condition.shape[1], 1)), n, axis=0)
+
+      step=0
+
+      for k in range(len(ts))[::-1]:
+        key, subkey = random.split(key)
+        z = random.normal(subkey, shape=x_t.shape)
+
+        t = ts[k]
+        dt = jnp.where(k > 0, t - ts[k-1], 0.)
+
+        inputs = jnp.concatenate((x_t, condition), axis=-1)
+
+
+        f_theta = state.apply_fn(state.params, inputs, t * jnp.ones((n,)))
+
+        # equation (40)
+        s_theta = jnp.where(k > 0, x_t/(1-jnp.exp(-t))  - jnp.exp(-t/2)/(1-jnp.exp(-t)) * f_theta,  0.)
+
+        # equation (24)
+        x_t_bar = x_t - dt * s_theta
+        x_t = jnp.exp(dt/2) * x_t_bar + jnp.sqrt(1-jnp.exp(-dt)) * z
+
+        x_t = jnp.clip(x_t, -1., 1.) # should we clip ...
+        #x_t = normalize_to_neg_one_to_one(x_t) # or scale?
+
+        step=step+1
+
+      return x_t
+
+    key = random.PRNGKey(SEED)
+    n_samples = 1000
+
+    # use the best params
+    file_path, epoch, step, loss = utils.find_latest_pytree(f'{PROJECT_DIR}/cem_params_*.npy')
+    cem_state = utils.create_training_state(params_file=file_path)
+    print(f'using parameters from epoch {epoch} with loss {loss}')
+    ts = utils.exponential_time_schedule(T, K)
+    path=f'{Path.home()}/Documents/data/Mayo_Grand_Challenge/Patient_Data/Training_Image_Data/3mm B30'
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    test_data = hf['test'][36]
+    fd_data, ld_data = test_data
+
+  # create empty samples HDF5 to store samples
+  samples_path = f'{Path.home()}/Documents/data/cem_samples.hdf5'
+  with h5py.File(samples_path, 'w') as hf:
+    samples = hf.create_dataset('samples', data=np.zeros((n_samples, 512, 512, 1)), compression='gzip', chunks=True)
+
+  for i in tqdm(range(n_samples // BATCH_SIZE)):
+    # generate x_0 from noise
+    key, subkey = random.split(key)
+    x_0_tilde = sample(cem_state, ld_data, BATCH_SIZE, ts, subkey)
+
+    # rescale in HU
+    x_0_tilde = x_0_tilde * ww/2 + wl
+
+    with h5py.File(samples_path, 'a') as hf:
+      hf['samples'][(i * BATCH_SIZE):((i + 1) * BATCH_SIZE)] = x_0_tilde
+
+  with h5py.File(samples_path, 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
+
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.normalize_to_greyscale(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.normalize_to_greyscale(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(utils.normalize_to_greyscale(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
+
+
+  plt.show()
+#+end_src
+
+#+RESULTS:
+: using parameters from epoch 68 with loss 0.00039
+: 100% 100/100 [12:04:09<00:00, 434.50s/it]
+:END:
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  samples_path = f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
+  with h5py.File(samples_path, 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
+
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM variance")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(wd(sample_variance))
+
+  plt.show()
+
+#+end_src
+
+#+RESULTS:
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mNameError[0m                                 Traceback (most recent call last)
+: Cell [0;32mIn[1], line 1[0m
+: [0;32m----> 1[0m samples_path [38;5;241m=[39m [38;5;124mf[39m[38;5;124m'[39m[38;5;132;01m{[39;00mPath[38;5;241m.[39mhome()[38;5;132;01m}[39;00m[38;5;124m/Documents/bayesian-inversion/cem_samples.hdf5[39m[38;5;124m'[39m
+: [1;32m      2[0m [38;5;28;01mwith[39;00m h5py[38;5;241m.[39mFile(samples_path, [38;5;124m'[39m[38;5;124mr[39m[38;5;124m'[39m) [38;5;28;01mas[39;00m hf:
+: [1;32m      3[0m   samples [38;5;241m=[39m hf[[38;5;124m'[39m[38;5;124msamples[39m[38;5;124m'[39m]
+:
+: [0;31mNameError[0m: name 'Path' is not defined
+:RESULTS:
+# [goto error]
+:END:
+
+We show the results from samples generated externally.
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import h5py
+  from pathlib import Path
+  import matplotlib.pyplot as plt
+  import numpy as np
+
+  import utils
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    fd_data, ld_data = hf['test'][36]
+
+  with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0)
+    sample_variance = np.var(samples, axis=0)
+
+  ww = 350
+  wl = 50
+  error = (sample_mean - fd_data) * ww/2 + wl
+  error_ld = (sample_mean - ld_data) * ww/2 + wl
+
+  # plot the data
+  imkwargs = dict(vmin=-0.2, vmax=0.2)
+  #fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
+  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5))
+  _ = fig.tight_layout()
+  _ = axs[0, 0].set_title("full dose image")
+  _ = axs[0, 0].imshow(utils.window_image(fd_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("quarter dose image")
+  _ = axs[0, 1].imshow(utils.window_image(ld_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].set_title("CEM mean")
+  _ = axs[1, 0].imshow(utils.window_image(sample_mean * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  _ = axs[1, 1].set_title("CEM - FD")
+  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(error), cmap=plt.cm.Greys_r)
+
+  plt.show()
+  print(f'{np.mean(error)}, {np.mean(error_ld)}')
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/9c9088e537c76eb0c0020c3036fa270840b63c44.png]]
+: 130.34633930050992, 130.28964145505094
+:END:
+
+Full Dose Image
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  _ = plt.imshow(utils.window_image(fd_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  plt.grid(None)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 432
+[[file:./.ob-jupyter/a6af64ac4d8bc1324f357378df7b8598d2d9e5aa.png]]
+:END:
+
+Low Dose Image
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  _ = plt.imshow(utils.window_image(ld_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  plt.grid(None)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 432
+[[file:./.ob-jupyter/5a102a69e939e24a31652c6d5b645794747e09c4.png]]
+:END:
+
+CEM sample mean
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  _ = plt.imshow(utils.window_image(sample_mean * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
+  plt.grid(None)
+  plt.show()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 432
+[[file:./.ob-jupyter/adce9197a5739afccad6d68e141f59b1cfd3b278.png]]
+:END:
+
+
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import utils
+  import h5py
+  from pathlib import Path
+  import numpy as np
+
+  ww = 350
+  wl = 50
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+      test = hf['test']
+      images = [utils.window_image(img[0] * ww/2 + wl, ww, wl) for img in test[36:52]]
+      print(f'{np.min(test)} - {np.max(test)}')
+
+  utils.show_img_grid(images)
+
+#+end_src
+
+
+#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
+#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
+  import utils
+  import h5py
+  with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
+        images = [utils.window_image(img, 350, 50) for img in hf['samples'][:64]]
+
+  utils.show_img_grid(images)
+
+#+end_src
+
+#+RESULTS:
+[[file:./.ob-jupyter/140575da8544742fc06c6de23df6f131b8712527.png]]
+
+* Reads
+- Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html
+- Example to perform simple image reconstruction using scikit-image https://scikit-image.org/docs/stable/auto_examples/transform/plot_radon_transform.html
+- Python code to reconstruct image from helical scans? https://github.com/dzwiedzn7/filtered-back-projection/blob/master/tompy.py
+- Python code to simulate thick slice images from Helical scans https://github.com/Feanor007/Thin2Thick
+- Python library for Tomography https://pypi.org/project/algotom/
+- C code for Model-Based Iterative Reconstruciton code for Multi-Slice Helical Geometry https://github.com/cabouman/OpenMBIR-Index/blob/master/README.md
+- General summary for 3D image reconstruction https://humanhealth.iaea.org/HHW/MedicalPhysics/NuclearMedicine/ImageAnalysis/3Dimagereconstruction/index.html
+- Pyro-NN: Generalized Python code for image reconstruction using deep learning implemented in Tensorflow code https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6899669/
+- TomoPy: python library for tomographic data analysis https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4181643/
+- Powerpoint presentation on CT image reconstruction http://www.sci.utah.edu/~shireen/pdfs/tutorials/Elhabian_CT09.pdf
+- Astra toolbox: python matlab library for 2D/3D tomography https://github.com/astra-toolbox/astra-toolbox
+- Operator Discretization Library (ODL): used by authors of the paper and has example Python code to reconstruct image from Helical scans https://github.com/odlgroup/odl/tree/master/examples/tomo
+- matlab code for simple low-dose CT samples simulation https://github.com/smuzd/LD-CT-simulation/tree/master
+- matlab code for 2nd winner from 2016 Mayo Grand Challenge https://github.com/jongcye/deeplearningLDCT/tree/master
+- Jupyter code to add white noise to CT scans. May have code to reconstruct images from Helical scans? https://github.com/ayaanzhaque/Noise2Quality
+- Alternative CT training data? https://www.kaggle.com/c/data-science-bowl-2017/overview
+- Alternative CT training data from piglets? https://link.springer.com/article/10.1007/s10278-018-0056-0
+* References
+#+PRINT_BIBLIOGRAPHY:
