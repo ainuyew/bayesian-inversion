@@ -241,7 +241,7 @@ Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and com
 : noise: 0.00468
 [[file:./.ob-jupyter/87b4f042c9bbc291a64110740ae09645af97d617.png]]
 :END:
-We preprocess the data to 512x512x1 and window to a range of 350 HU and centered about 50 HU. Importantly, the data is saved in HDF5 format. This allows us to not load the entire training or test data into memory and use the data in a similar fashion to numpy arrays.
+We preprocess the data to 128x128x1 and window to a range of 350 HU and centered about 50 HU. Importantly, the data is saved in HDF5 format. This allows us to not load the entire training or test data into memory and use the data in a similar fashion to numpy arrays.
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
   import h5py
@@ -264,10 +264,14 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
   ww = 350
   wl = 50
 
+  fd_data = fd_data * ww - wl
+  ld_data = ld_data * ww - wl
+  uld_data = uld_data * ww - wl
+
   fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(8, 4.5), sharex=True, sharey=True)
-  figures = [('Ground Truth', ax1, utils.window_densities(fd_data, ww, wl)),
-           ('Low Dose Image', ax2, utils.window_densities(ld_data, ww, wl)),
-             ('Ultra Low Dose Image', ax3, utils.window_densities(uld_data, ww, wl))]
+  figures = [('Ground Truth', ax1, utils.window_image(fd_data, ww, wl)),
+             ('Low Dose Image', ax2, utils.window_image(ld_data, ww, wl)),
+             ('Ultra Low Dose Image', ax3, utils.window_image(uld_data, ww, wl))]
 
   _ = fig.tight_layout()
   for title, ax, figure in figures:
@@ -280,52 +284,11 @@ We preprocess the data to 512x512x1 and window to a range of 350 HU and centered
 
 #+RESULTS:
 :RESULTS:
-: loading patient data: 100% 9/9 [03:54<00:00, 26.03s/it]
-: loading patient data: 100% 1/1 [00:22<00:00, 22.29s/it]
-[[file:./.ob-jupyter/57878659e054be1078d3413b3b2cb6ce33eae3b5.png]]
-:END:
-
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import h5py
-  import matplotlib.pyplot as plt
-  from pathlib import Path
-  import numpy as np
-
-  import mayo, utils
-
-  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
-    fd_data, ld_data, _ = hf['test'][36]
-
-  ww = 350
-  wl = 50
-
-  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
-  _ = fig.tight_layout()
-
-  fd_img = utils.window_densities(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), ww, wl)
-  ld_img = utils.window_densities(ld_data, ww, wl)
-  uld_fbp = utils.window_densities(mayo.add_noise(fd_data.reshape((fd_data.shape[0], fd_data.shape[1])), N0=30000), ww, wl)
-  figures = [('Normal Dose', axs[0, 0], fd_img),
-             ('Low Dose', axs[0, 1], ld_img),
-             ('Image + Noise', axs[1, 0], utils.window_densities(mayo.add_simple_noise(fd_data, peak=2), ww, wl)),
-             ('Image = Projection + Noise', axs[1, 1], uld_fbp),
-             ]
-
-  for title, ax, image in figures:
-    ax.grid(None)
-    ax.set_title(title)
-    ax.imshow(image, cmap=plt.cm.Greys_r)
-
-  plt.show()
-
-  print(f'{np.mean((uld_fbp - fd_img)**2)} vs {np.mean((ld_img - fd_img)**2)}')
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-[[file:./.ob-jupyter/d1c62665f280ec90b5d045028d51131ae1e8c148.png]]
-: 510.11683248438385 vs 9874.421876490394
+: loading patient data: 100% 9/9 [01:41<00:00, 11.25s/it]
+:
+: loading patient data: 100% 1/1 [00:11<00:00, 11.18s/it]
+:
+[[file:./.ob-jupyter/bed136635914bbec7f8405a2daccf8f4e60d5c39.png]]
 :END:
 
 ** ODL examples
@@ -906,139 +869,59 @@ We sample images from the trained CEM model.
   plt.show()
 #+end_src
 
-#+RESULTS:
-: using parameters from epoch 68 with loss 0.00039
-: 100% 100/100 [12:04:09<00:00, 434.50s/it]
-:END:
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
 #+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  samples_path = f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
+  import utils
+  import h5py
+  from pathlib import Path
+  import numpy as np
+  import matplotlib.pyplot as plt
+
+  ww = 350
+  wl = 50
+
+  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
+    fd_data, ld_data, uld_data = hf['test'][36]
+
+  samples_path=f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
+
   with h5py.File(samples_path, 'r') as hf:
     samples = hf['samples']
     sample_mean = np.mean(samples, axis=0)
     sample_variance = np.var(samples, axis=0)
+
+
+  fd_data = fd_data * ww - wl
+  ld_data = ld_data * ww - wl
+  uld_data = uld_data * ww - wl
+  sample_mean = sample_mean * ww - wl
 
   # plot the data
   imkwargs = dict(vmin=-0.2, vmax=0.2)
   fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
   _ = fig.tight_layout()
   _ = axs[0, 0].set_title("full dose image")
-  _ = axs[0, 0].imshow(wd(fd_data), cmap=plt.cm.Greys_r)
-  _ = axs[0, 1].set_title("quarter dose image")
-  _ = axs[0, 1].imshow(wd(ld_data), cmap=plt.cm.Greys_r)
+  _ = axs[0, 0].imshow(utils.window_image(fd_data, ww, wl), cmap=plt.cm.Greys_r)
+  _ = axs[0, 1].set_title("ultra low dose image")
+  _ = axs[0, 1].imshow(utils.window_image(uld_data, ww, wl), cmap=plt.cm.Greys_r)
   _ = axs[1, 0].set_title("CEM mean")
-  _ = axs[1, 0].imshow(wd(sample_mean), cmap=plt.cm.Greys_r)
+  _ = axs[1, 0].imshow(utils.window_image(sample_mean, ww, wl), cmap=plt.cm.Greys_r)
   _ = axs[1, 1].set_title("CEM variance")
   #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-  _ = axs[1, 1].imshow(wd(sample_variance))
+  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
 
   plt.show()
 
-#+end_src
-
-#+RESULTS:
-: [0;31m---------------------------------------------------------------------------[0m
-: [0;31mNameError[0m                                 Traceback (most recent call last)
-: Cell [0;32mIn[1], line 1[0m
-: [0;32m----> 1[0m samples_path [38;5;241m=[39m [38;5;124mf[39m[38;5;124m'[39m[38;5;132;01m{[39;00mPath[38;5;241m.[39mhome()[38;5;132;01m}[39;00m[38;5;124m/Documents/bayesian-inversion/cem_samples.hdf5[39m[38;5;124m'[39m
-: [1;32m      2[0m [38;5;28;01mwith[39;00m h5py[38;5;241m.[39mFile(samples_path, [38;5;124m'[39m[38;5;124mr[39m[38;5;124m'[39m) [38;5;28;01mas[39;00m hf:
-: [1;32m      3[0m   samples [38;5;241m=[39m hf[[38;5;124m'[39m[38;5;124msamples[39m[38;5;124m'[39m]
-:
-: [0;31mNameError[0m: name 'Path' is not defined
-:RESULTS:
-# [goto error]
-:END:
-
-We show the results from samples generated externally.
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import h5py
-  from pathlib import Path
-  import matplotlib.pyplot as plt
-  import numpy as np
-
-  import utils
-
-  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
-    fd_data, ld_data = hf['test'][36]
-
-  with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
-    samples = hf['samples']
-    sample_mean = np.mean(samples, axis=0)
-    sample_variance = np.var(samples, axis=0)
-
-  ww = 350
-  wl = 50
-  error = (sample_mean - fd_data) * ww/2 + wl
-  error_ld = (sample_mean - ld_data) * ww/2 + wl
-
-  # plot the data
-  imkwargs = dict(vmin=-0.2, vmax=0.2)
-  #fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
-  fig, axs = plt.subplots(2, 2, figsize=(8, 4.5))
-  _ = fig.tight_layout()
-  _ = axs[0, 0].set_title("full dose image")
-  _ = axs[0, 0].imshow(utils.window_image(fd_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
-  _ = axs[0, 1].set_title("quarter dose image")
-  _ = axs[0, 1].imshow(utils.window_image(ld_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
-  _ = axs[1, 0].set_title("CEM mean")
-  _ = axs[1, 0].imshow(utils.window_image(sample_mean * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
-  _ = axs[1, 1].set_title("CEM - FD")
-  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(error), cmap=plt.cm.Greys_r)
-
-  plt.show()
-  print(f'{np.mean(error)}, {np.mean(error_ld)}')
+  print(f'MSE(uld, fd) {np.mean((uld_data - fd_data)**2)}')
+  print(f'MSE(cem, fd) {np.mean((sample_mean - fd_data)**2)}')
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/9c9088e537c76eb0c0020c3036fa270840b63c44.png]]
-: 130.34633930050992, 130.28964145505094
+[[file:./.ob-jupyter/63b08e43e57d32a0dc2a17c69e9235322bb34420.png]]
+: MSE(uld, fd) 741.0283824074941
+: MSE(cem, fd) 657.9250637112899
 :END:
-
-Full Dose Image
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  _ = plt.imshow(utils.window_image(fd_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
-  plt.grid(None)
-  plt.show()
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-#+attr_org: :width 432
-[[file:./.ob-jupyter/a6af64ac4d8bc1324f357378df7b8598d2d9e5aa.png]]
-:END:
-
-Low Dose Image
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  _ = plt.imshow(utils.window_image(ld_data * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
-  plt.grid(None)
-  plt.show()
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-#+attr_org: :width 432
-[[file:./.ob-jupyter/5a102a69e939e24a31652c6d5b645794747e09c4.png]]
-:END:
-
-CEM sample mean
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  _ = plt.imshow(utils.window_image(sample_mean * ww/2 + wl, ww, wl), cmap=plt.cm.Greys_r)
-  plt.grid(None)
-  plt.show()
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-#+attr_org: :width 432
-[[file:./.ob-jupyter/adce9197a5739afccad6d68e141f59b1cfd3b278.png]]
-:END:
-
 
 
 #+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
@@ -1046,34 +929,19 @@ CEM sample mean
   import utils
   import h5py
   from pathlib import Path
-  import numpy as np
 
   ww = 350
   wl = 50
 
-  with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
-      test = hf['test']
-      images = [utils.window_image(img[0] * ww/2 + wl, ww, wl) for img in test[36:52]]
-      print(f'{np.min(test)} - {np.max(test)}')
-
-  utils.show_img_grid(images)
-
-#+end_src
-
-
-#+ATTR_LATEX: :options frame=single, linenos, breaklines, tabsize=2
-#+begin_src jupyter-python :session py :exports both :async yes :eval never-export
-  import utils
-  import h5py
   with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
-        images = [utils.window_image(img, 350, 50) for img in hf['samples'][:64]]
+        images = [utils.window_image(img * ww - wl, ww, wl) for img in hf['samples'][:9]]
 
   utils.show_img_grid(images)
 
 #+end_src
 
 #+RESULTS:
-[[file:./.ob-jupyter/140575da8544742fc06c6de23df6f131b8712527.png]]
+[[file:./.ob-jupyter/b5966c204c66decb8494e2253ff0c5c519a92527.png]]
 
 * Reads
 - Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html

@@ -76,7 +76,7 @@ def main(n_samples=1000):
 SEED=42
 T=10.
 K=1000
-BATCH_SIZE = 5
+BATCH_SIZE = 10
 PROJECT_DIR=os.path.abspath('.')
 
 if __name__ == '__main__':

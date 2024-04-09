@@ -176,9 +176,6 @@ def window_image(x: np.ndarray, ww: int, wl: int, out_range=(0., 255.)) -> np.nd
     out_lower, out_upper = out_range
     return (clipped - lower)/ww * (out_upper - out_lower) + out_lower
 
-def window_densities(x: np.ndarray, ww: int, wl:int, out_range=(0., 255.)) -> np.ndarray:
-    return window_image(densities_to_hu(x), ww, wl, out_range)
-
 def signal_to_noise_ratio(x, axis=0, ddof=0):
     x = np.asanyarray(x)
     m = x.mean(axis)
@@ -195,8 +192,8 @@ def peak_signal_to_noise_ratio(x, y):
     return 20 * math.log10(PIXEL_MAX) - 10 * math.log10(mse)
 
 
-def hu_to_densities(hu_values):
-    return hu_values/1000. +1.
+def rescale_hu(hu_values, ww, wl):
+    return (hu_values + wl)/(ww)
 
-def densities_to_hu(densities):
-    return (densities - 1.) * 1000.
+def unscale_hu(hu_normalized, ww, wl):
+    return hu_normalized * ww - wl
