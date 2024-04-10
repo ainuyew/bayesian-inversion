@@ -284,11 +284,11 @@ We preprocess the data to 128x128x1 and window to a range of 350 HU and centered
 
 #+RESULTS:
 :RESULTS:
-: loading patient data: 100% 9/9 [01:41<00:00, 11.25s/it]
+: loading patient data: 100% 9/9 [02:09<00:00, 14.34s/it]
 :
-: loading patient data: 100% 1/1 [00:11<00:00, 11.18s/it]
+: loading patient data: 100% 1/1 [00:14<00:00, 14.77s/it]
 :
-[[file:./.ob-jupyter/bed136635914bbec7f8405a2daccf8f4e60d5c39.png]]
+[[file:./.ob-jupyter/9dad22006e92686768aeab3338ada870ec4f2d9c.png]]
 :END:
 
 ** ODL examples
@@ -865,7 +865,6 @@ We sample images from the trained CEM model.
   #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
   _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
 
-
   plt.show()
 #+end_src
 
@@ -876,6 +875,7 @@ We sample images from the trained CEM model.
   from pathlib import Path
   import numpy as np
   import matplotlib.pyplot as plt
+  from matplotlib.patches import Circle
 
   ww = 350
   wl = 50
@@ -895,32 +895,47 @@ We sample images from the trained CEM model.
   ld_data = ld_data * ww - wl
   uld_data = uld_data * ww - wl
   sample_mean = sample_mean * ww - wl
+  sample_variance = sample_variance * ww - wl
 
+  # save images for analysis
+  for file_name, image_data in [('full_dose.png', fd_data), ('ultra_low_dose.png', uld_data), ('cem_sample_mean.png', sample_mean)]:
+    plt.clf()
+    plt.imshow(utils.window_image(image_data, ww, wl), cmap=plt.cm.Greys_r)
+    plt.grid(None)
+    plt.savefig(file_name)
+
+  plt.clf()
   # plot the data
   imkwargs = dict(vmin=-0.2, vmax=0.2)
   fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
   _ = fig.tight_layout()
-  _ = axs[0, 0].set_title("full dose image")
-  _ = axs[0, 0].imshow(utils.window_image(fd_data, ww, wl), cmap=plt.cm.Greys_r)
-  _ = axs[0, 1].set_title("ultra low dose image")
-  _ = axs[0, 1].imshow(utils.window_image(uld_data, ww, wl), cmap=plt.cm.Greys_r)
-  _ = axs[1, 0].set_title("CEM mean")
-  _ = axs[1, 0].imshow(utils.window_image(sample_mean, ww, wl), cmap=plt.cm.Greys_r)
-  _ = axs[1, 1].set_title("CEM variance")
-  #_ = axs[1, 1].imshow(wd(sample_variance), **imkwargs)
-  _ = axs[1, 1].imshow(utils.normalize_to_greyscale(sample_variance))
+  images = [('full dose', fd_data, axs[0, 0]),
+            ('ultra low dose', uld_data, axs[0, 1]),
+            ('CEM sample mean', sample_mean, axs[1, 0]),
+            ('CEM sample variance', sample_variance, axs[1, 1])]
+  for title, image_data, ax in images:
+    _ = ax.set_title("full dose image")
+    _ = ax.grid(None)
+    _ = ax.imshow(utils.window_image(image_data, ww, wl), cmap=plt.cm.Greys_r)
+    reference_region = Circle((30, 48), 10, fill=False, color='yellow')
+    lesion_region = Circle((36, 66), 7, fill=False, color='red')
+    ax.add_patch(reference_region)
+    ax.add_patch(lesion_region)
 
   plt.show()
 
   print(f'MSE(uld, fd) {np.mean((uld_data - fd_data)**2)}')
   print(f'MSE(cem, fd) {np.mean((sample_mean - fd_data)**2)}')
+  print(f'MSE(cem, uld) {np.mean((sample_mean - uld_data)**2)}')
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/63b08e43e57d32a0dc2a17c69e9235322bb34420.png]]
-: MSE(uld, fd) 741.0283824074941
+: <Figure size 640x480 with 0 Axes>
+[[file:./.ob-jupyter/dbe91531a48181690bce1199a78c3b0780d4a125.png]]
+: MSE(uld, fd) 1068.795014475763
 : MSE(cem, fd) 657.9250637112899
+: MSE(cem, uld) 1089.6424588439897
 :END:
 
 
@@ -933,15 +948,24 @@ We sample images from the trained CEM model.
   ww = 350
   wl = 50
 
-  with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
-        images = [utils.window_image(img * ww - wl, ww, wl) for img in hf['samples'][:9]]
+  plt.clf()
+  plt.imshow(images[0], cmap=plt.cm.Greys_r)
+  plt.grid(None)
+  plt.savefig('cem_sample1.png')
 
+
+  with h5py.File(f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5', 'r') as hf:
+      images = [utils.window_image(img * ww - wl, ww, wl) for img in hf['samples'][:9]]
+  plt.clf()
   utils.show_img_grid(images)
 
 #+end_src
 
 #+RESULTS:
+:RESULTS:
+: <Figure size 640x480 with 0 Axes>
 [[file:./.ob-jupyter/b5966c204c66decb8494e2253ff0c5c519a92527.png]]
+:END:
 
 * Reads
 - Quick summary on CR reconstruciton and Helical CT http://xrayphysics.com/ctsim.html

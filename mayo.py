@@ -86,7 +86,7 @@ def get_data(folder, patients, slice_start=0, slice_end=-1):
         ld_pixel_arrays = get_pixel_arrays(ld_file_paths)
         uld_pixel_arrays = []
         for pixel_array in fd_pixel_arrays:
-            uld_pixel_arrays.append(add_noise(pixel_array.reshape((pixel_array.shape[0], pixel_array.shape[1]))).reshape((pixel_array.shape)))
+            uld_pixel_arrays.append(add_noise(pixel_array.reshape((pixel_array.shape[0], pixel_array.shape[1])), N0=10000).reshape((pixel_array.shape)))
 
         fd_data[0:0] = fd_pixel_arrays # concatenate two lists
         ld_data[0:0] = ld_pixel_arrays
