@@ -876,6 +876,7 @@ We sample images from the trained CEM model.
   import numpy as np
   import matplotlib.pyplot as plt
   from matplotlib.patches import Circle
+  from scipy import stats
 
   ww = 350
   wl = 50
@@ -883,19 +884,25 @@ We sample images from the trained CEM model.
   with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
     fd_data, ld_data, uld_data = hf['test'][36]
 
-  samples_path=f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
-
-  with h5py.File(samples_path, 'r') as hf:
-    samples = hf['samples']
-    sample_mean = np.mean(samples, axis=0)
-    sample_variance = np.var(samples, axis=0)
-
-
   fd_data = fd_data * ww - wl
   ld_data = ld_data * ww - wl
   uld_data = uld_data * ww - wl
-  sample_mean = sample_mean * ww - wl
-  sample_variance = sample_variance * ww - wl
+
+  samples_path=f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
+
+  with h5py.File(samples_path, 'r') as hf:
+
+    samples = hf['samples']
+    sample_mean = np.mean(samples, axis=0) * ww - wl
+    sample_variance = np.var(samples, axis=0) * ww - wl
+    lesion_contrast_sum = 0.
+    for sample in samples:
+      sample_hu = sample * ww - wl
+      reference_roi = utils.get_image_region(sample_hu, reference_center, reference_radius)
+      lesion_roi = utils.get_image_region(sample_hu, lesion_center, lesion_radius)
+      lesion_contrast = lesion_roi.mean() - reference_roi.mean()
+      lesion_contrast_sum = lesion_contrast + lesion_contrast_sum
+    print(f'mean of CEM individual sample contrast = {lesion_contrast_sum/len(samples)}')
 
   # save images for analysis
   for file_name, image_data in [('full_dose.png', fd_data), ('ultra_low_dose.png', uld_data), ('cem_sample_mean.png', sample_mean)]:
@@ -910,32 +917,41 @@ We sample images from the trained CEM model.
   fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
   _ = fig.tight_layout()
   images = [('full dose', fd_data, axs[0, 0]),
-            ('ultra low dose', uld_data, axs[0, 1]),
-            ('CEM sample mean', sample_mean, axs[1, 0]),
-            ('CEM sample variance', sample_variance, axs[1, 1])]
+            ('low dose', ld_data, axs[0, 1]),
+            ('ultra low dose', uld_data, axs[1, 0]),
+            ('CEM', sample_mean, axs[1, 1]),]
+
+
+  reference_center = (30, 48)
+  reference_radius = 10
+  lesion_center = (36, 66)
+  lesion_radius = 3
   for title, image_data, ax in images:
-    _ = ax.set_title("full dose image")
+    reference_roi = utils.get_image_region(image_data, reference_center, reference_radius)
+    lesion_roi = utils.get_image_region(image_data, lesion_center, lesion_radius)
+    lesion_contrast = lesion_roi.mean() - reference_roi.mean()
+
+    t_statistics, p_value = stats.ttest_ind(reference_roi, lesion_roi, equal_var=True)
+
+    _ = ax.set_title(f'{title} ({lesion_contrast:.0f}HU; t-stat {t_statistics[0]:.2f})')
     _ = ax.grid(None)
     _ = ax.imshow(utils.window_image(image_data, ww, wl), cmap=plt.cm.Greys_r)
-    reference_region = Circle((30, 48), 10, fill=False, color='yellow')
-    lesion_region = Circle((36, 66), 7, fill=False, color='red')
+    reference_region = Circle(reference_center, reference_radius, fill=False, color='yellow', linewidth=1)
+    lesion_region = Circle(lesion_center, lesion_radius, fill=False, color='red', linewidth=1)
     ax.add_patch(reference_region)
     ax.add_patch(lesion_region)
 
+
   plt.show()
 
-  print(f'MSE(uld, fd) {np.mean((uld_data - fd_data)**2)}')
-  print(f'MSE(cem, fd) {np.mean((sample_mean - fd_data)**2)}')
-  print(f'MSE(cem, uld) {np.mean((sample_mean - uld_data)**2)}')
+
 #+end_src
 
 #+RESULTS:
 :RESULTS:
+: mean of CEM individual sample contrast = 222.9032461574849
 : <Figure size 640x480 with 0 Axes>
-[[file:./.ob-jupyter/dbe91531a48181690bce1199a78c3b0780d4a125.png]]
-: MSE(uld, fd) 1068.795014475763
-: MSE(cem, fd) 657.9250637112899
-: MSE(cem, uld) 1089.6424588439897
+[[file:./.ob-jupyter/e740404a2befda3f577afd66c37d89a71ea77324.png]]
 :END:
 
 

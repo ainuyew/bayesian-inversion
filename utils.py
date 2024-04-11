@@ -197,3 +197,8 @@ def rescale_hu(hu_values, ww, wl):
 
 def unscale_hu(hu_normalized, ww, wl):
     return hu_normalized * ww - wl
+
+def get_image_region(image, center, radius):
+    indexes = [(x, y) for x in range(image.shape[0]) for y in range(image.shape[1])]
+    region = [image[x, y] for x, y in indexes if ((x - center[0])**2 + (y - center[1])**2) < (radius **2)]
+    return np.array(region)

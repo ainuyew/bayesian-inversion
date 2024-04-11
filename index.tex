@@ -1,4 +1,4 @@
-% Created 2024-04-10 Wed 20:08
+% Created 2024-04-11 Thu 11:17
 % Intended LaTeX compiler: pdflatex
 \documentclass[a4paper, 11pt]{article}
 \usepackage[utf8]{inputenc}
@@ -41,7 +41,7 @@
 
 
 \section{Problem Statement}
-\label{sec:orgb75ed5d}
+\label{sec:org0e26f15}
 This is an investigation into the use of diffusion models to solve the problem discussed in (Adler, Jonas and Öktem, Ozan, 2018). Specifically, we use DDPM and CEM to model the problems. We want to investigate if DDPM and CEM will perform better than the reference method/model ((Adler, Jonas and Öktem, Ozan, 2018)) to denoise ultra low dose CT scans, and produce higher quality CT scans similar to the normal dose images.
 
 In a CT scan of a subjectsbegy2pts, multiple 2D projections are generated for each angle of projection. Projections are created by the forward projection algorithm,and measures the attenutation (reduction in intensity) of the x-ray beam (cast no the subject towards the deector). A sinogram consist of mutiple projections stacked together. We can then reconstruct a 3D image of the subject of interest through a back projection algorithm such as filtered back projection (FBP). Filtered back projection is the industry standard to reconstruct images from sinograms because it is fast and robust. FBP applies a image de-blur filter (sharpen) to the projection (sinogram) and then back project the resulting projection to a 3D image. In back projection, we map the data in detector space to image space.
@@ -51,7 +51,7 @@ In (Adler, Jonas and Öktem, Ozan, 2018), we train two neural networks (GAN) to 
 (Moen, Taylor R. and Chen, Baiyu and Holmes III, David R. and Duan, Xinhui and Yu, Zhicong and Yu, Lifeng and Leng, Shuai and Fletcher, Joel G. and McCollough, Cynthia H., 2021) provides an overview of the data provided for the grand challenge. In particular, the low dose projection (DICOM-CT-PD) are simulated from the normal dose projections by adding Poisson noise.
 
 \subsection{Filtered Back Projection (FBP)}
-\label{sec:org3762e6a}
+\label{sec:org6bd8ded}
 Found a site on filtered back projection \url{https://howradiologyworks.com/filtered-backprojection-fbp-illustrated-guide-for-radiologic-technologists/\#:\~:text=Back\%20projection\%20is\%20the\%20process,Filtered\%20Backprojection\%20and\%20Iterative\%20Reconstruction}. A traditional x-ray scan gives us a 2d image of a subject of interest from a view (usually in front of the patient for a chest scan). One 2d image does not provide us a very good understanding of the subject. A forward projection algorithm instead takes multiple 2d images of a the subject from multiple and different angles/views. The end results are \uline{sinograms}. Each line/row in a sinogram corresponds to 2d image taken of the subject at particular view. A sinogram is so named because each point in the subject corresponds traces a sinusoid curve.
 
 Given knowledge of how a forward projection works, we can reverse the process (which we call back projection) to reconstruct an image of the subject. Because the back projection (BP) is performed one view at a time, the resulting reconstructed image is a blurred image (\url{https://www.youtube.com/watch?v=YvYIkbiRMy0}). To remedy this problem, we can apply a sharpening step (or image deblurring). This image deblurring can be applied in three different manner:
@@ -63,7 +63,7 @@ Given knowledge of how a forward projection works, we can reverse the process (w
 The second option (called Filtered Back Projection or FBP) is the most common as it is fast and robust. Back projection is the process of mapping the data from the detector space to the image space, while forward projection is the process of mapping the data in the image space to the detector space.
 
 \section{Data}
-\label{sec:orgba1018a}
+\label{sec:org8cc9c92}
 We use data from 2016 Low Dose CT Grand Challenge (\url{https://www.aapm.org/grandchallenge/lowdosect/\#testDatasets}). Training data is downloaded from box at \url{https://aapm.app.box.com/s/eaw4jddb53keg1bptavvvd1sf4x3pe9h}. (\url{https://www.imagewisely.org/Imaging-Modalities/Computed-Tomography/Image-Reconstruction-Techniques}) The data contains images reconstructed using two reconstruction kernels B30 and D45. Reconstruction kernels (also called “filter” or “algorithm”) affects the image quality. There is a tradeoff between spatial resolution and noise. A smoother kernel generates images with lower noise but with reduced spatial resolution. A sharper kernel generates images with higher spatial resolution, but increases the image noise. Spatial resolution in CT is the ability to differentiate objects of different density. A high spatial resolution is important to distinguish objects that are close to one another.
 
 Patient\textsubscript{Data} directory contains the reconstructed images and projections (in DICOM-CT-PD format) of the CT scans.
@@ -124,7 +124,7 @@ plt.show()
 \end{center}
 
 \subsection{scikit-image}
-\label{sec:org6a365cf}
+\label{sec:org595aee9}
 We apply forward projection on the batch to obtain their respective sinograms (Radon transform).
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import numpy as np
@@ -202,7 +202,7 @@ FBP rms reconstruction error: 10.6
 \end{center}
 
 \subsection{Ultra Low Dose Simulation}
-\label{sec:org0a0538c}
+\label{sec:org6ab8f3c}
 We adopt the second method of generating low dose images from normal dose images (Elhamiasl, Masoud and Nuyts, Johan, 2020). Specifically, we generate virtual projections from rescontructed full dose images, simulate noise due to a lower dosage, and reconstruct the image.
 ((Yi, Xin and Babyn, Paul, 2018)) \(N\sim \text{Poisson}(N_0 \exp(-y)) + \text{Gaussian}(0, \sigma_e^2)\) where \(N_0\) is the intensity of the x-ray source, \(y\) is the sinogram data, and \(\sigma_e^2\) represent the eletrical noise standard deviation.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
@@ -255,7 +255,7 @@ plt.imshow(image_noisy, cmap=plt.cm.Greys_r)
 \end{center}
 
 \subsection{Preprocessing data for training}
-\label{sec:org91a7fab}
+\label{sec:org12845e9}
 Here, we retrieve Mayo training data in pairs (full dose, quarter dose), and compare a few samples.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import mayo
@@ -345,7 +345,7 @@ loading patient data: 100% 1/1 [00:14<00:00, 14.77s/it]
 \end{center}
 
 \subsection{ODL examples}
-\label{sec:org2836959}
+\label{sec:org8cb164e}
 Next, we explore if we can reconstruct images from Mayo's full dose projections (Helical scans), and how it compares with the provided images reconstructed using commercial software (weighted FBP).
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 #from pydicom import dcmread
@@ -454,7 +454,7 @@ AttributeError: Dataset does not have attribute 'HUCalibrationFactor'.
 \end{verbatim}
 
 \section{DDPM}
-\label{sec:org5dc078a}
+\label{sec:orgcf0b9af}
 DDPM specific parameters.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import os
@@ -468,7 +468,7 @@ PROJECT_DIR=os.path.abspath('.')
 \end{minted}
 
 \subsection{Training}
-\label{sec:orgea2114b}
+\label{sec:org7f3233a}
 First, let's make sure we have the correct shapes for training data inputs and predictions.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 from jax import random
@@ -526,7 +526,7 @@ _ = plt.show()
 \end{center}
 
 \subsection{Sampling}
-\label{sec:org50255db}
+\label{sec:org385c625}
 We sample images from the trained DDPM model.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import matplotlib.pyplot as plt
@@ -765,7 +765,7 @@ plt.show()
 \end{minted}
 
 \section{CEM}
-\label{sec:orgedab874}
+\label{sec:org3ff1db7}
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import os
 
@@ -776,7 +776,7 @@ BATCH_SIZE = 10
 PROJECT_DIR=os.path.abspath('.')
 \end{minted}
 \subsection{Training}
-\label{sec:org750e617}
+\label{sec:org248b1ae}
 Training is performed via a python script \url{train\_cem.py}. We examine the average epoch loss with the following code:
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import pandas as pd
@@ -807,7 +807,7 @@ _ = plt.show()
 \end{center}
 
 \subsection{Sampling}
-\label{sec:org5310912}
+\label{sec:org9203451}
 We sample images from the trained CEM model.
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
 import matplotlib.pyplot as plt
@@ -918,6 +918,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+from scipy import stats
 
 ww = 350
 wl = 50
@@ -925,19 +926,25 @@ wl = 50
 with h5py.File(f'{Path.home()}/Documents/data/mayo.hdf5', 'r') as hf:
   fd_data, ld_data, uld_data = hf['test'][36]
 
-samples_path=f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
-
-with h5py.File(samples_path, 'r') as hf:
-  samples = hf['samples']
-  sample_mean = np.mean(samples, axis=0)
-  sample_variance = np.var(samples, axis=0)
-
-
 fd_data = fd_data * ww - wl
 ld_data = ld_data * ww - wl
 uld_data = uld_data * ww - wl
-sample_mean = sample_mean * ww - wl
-sample_variance = sample_variance * ww - wl
+
+samples_path=f'{Path.home()}/Documents/bayesian-inversion/cem_samples.hdf5'
+
+with h5py.File(samples_path, 'r') as hf:
+
+  samples = hf['samples']
+  sample_mean = np.mean(samples, axis=0) * ww - wl
+  sample_variance = np.var(samples, axis=0) * ww - wl
+  lesion_contrast_sum = 0.
+  for sample in samples:
+    sample_hu = sample * ww - wl
+    reference_roi = utils.get_image_region(sample_hu, reference_center, reference_radius)
+    lesion_roi = utils.get_image_region(sample_hu, lesion_center, lesion_radius)
+    lesion_contrast = lesion_roi.mean() - reference_roi.mean()
+    lesion_contrast_sum = lesion_contrast + lesion_contrast_sum
+  print(f'mean of CEM individual sample contrast = {lesion_contrast_sum/len(samples)}')
 
 # save images for analysis
 for file_name, image_data in [('full_dose.png', fd_data), ('ultra_low_dose.png', uld_data), ('cem_sample_mean.png', sample_mean)]:
@@ -952,37 +959,44 @@ imkwargs = dict(vmin=-0.2, vmax=0.2)
 fig, axs = plt.subplots(2, 2, figsize=(8, 4.5), sharex=True, sharey=True)
 _ = fig.tight_layout()
 images = [('full dose', fd_data, axs[0, 0]),
-          ('ultra low dose', uld_data, axs[0, 1]),
-          ('CEM sample mean', sample_mean, axs[1, 0]),
-          ('CEM sample variance', sample_variance, axs[1, 1])]
+          ('low dose', ld_data, axs[0, 1]),
+          ('ultra low dose', uld_data, axs[1, 0]),
+          ('CEM', sample_mean, axs[1, 1]),]
+
+
+reference_center = (30, 48)
+reference_radius = 10
+lesion_center = (36, 66)
+lesion_radius = 3
 for title, image_data, ax in images:
-  _ = ax.set_title("full dose image")
+  reference_roi = utils.get_image_region(image_data, reference_center, reference_radius)
+  lesion_roi = utils.get_image_region(image_data, lesion_center, lesion_radius)
+  lesion_contrast = lesion_roi.mean() - reference_roi.mean()
+
+  t_statistics, p_value = stats.ttest_ind(reference_roi, lesion_roi, equal_var=True)
+
+  _ = ax.set_title(f'{title} ({lesion_contrast:.0f}HU; t-stat {t_statistics[0]:.2f})')
   _ = ax.grid(None)
   _ = ax.imshow(utils.window_image(image_data, ww, wl), cmap=plt.cm.Greys_r)
-  reference_region = Circle((30, 48), 10, fill=False, color='yellow')
-  lesion_region = Circle((36, 66), 7, fill=False, color='red')
+  reference_region = Circle(reference_center, reference_radius, fill=False, color='yellow', linewidth=1)
+  lesion_region = Circle(lesion_center, lesion_radius, fill=False, color='red', linewidth=1)
   ax.add_patch(reference_region)
   ax.add_patch(lesion_region)
 
+
 plt.show()
 
-print(f'MSE(uld, fd) {np.mean((uld_data - fd_data)**2)}')
-print(f'MSE(cem, fd) {np.mean((sample_mean - fd_data)**2)}')
-print(f'MSE(cem, uld) {np.mean((sample_mean - uld_data)**2)}')
+
 \end{minted}
 
 \begin{verbatim}
+mean of CEM individual sample contrast = 222.9032461574849
 <Figure size 640x480 with 0 Axes>
 \end{verbatim}
 
 \begin{center}
-\includegraphics[width=.9\linewidth]{./.ob-jupyter/dbe91531a48181690bce1199a78c3b0780d4a125.png}
+\includegraphics[width=.9\linewidth]{./.ob-jupyter/e740404a2befda3f577afd66c37d89a71ea77324.png}
 \end{center}
-\begin{verbatim}
-MSE(uld, fd) 1068.795014475763
-MSE(cem, fd) 657.9250637112899
-MSE(cem, uld) 1089.6424588439897
-\end{verbatim}
 
 
 \begin{minted}[,frame=single, linenos, breaklines, tabsize=2]{python}
@@ -1015,7 +1029,7 @@ utils.show_img_grid(images)
 \end{center}
 
 \section{Reads}
-\label{sec:org55fd83e}
+\label{sec:orgd50265e}
 \begin{itemize}
 \item Quick summary on CR reconstruciton and Helical CT \url{http://xrayphysics.com/ctsim.html}
 \item Example to perform simple image reconstruction using scikit-image \url{https://scikit-image.org/docs/stable/auto\_examples/transform/plot\_radon\_transform.html}
@@ -1036,7 +1050,7 @@ utils.show_img_grid(images)
 \item Alternative CT training data from piglets? \url{https://link.springer.com/article/10.1007/s10278-018-0056-0}
 \end{itemize}
 \section{References}
-\label{sec:orgbb6b46e}
+\label{sec:org75d9450}
 \noindent
 Adler, Jonas and Öktem, Ozan (2018). \emph{Deep {{Bayesian Inversion}}}.
 
